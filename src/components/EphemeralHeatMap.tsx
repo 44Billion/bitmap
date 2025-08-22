@@ -8,6 +8,7 @@ import { AlertTriangle, Activity, MapPin, User, Plus, Minus, MessageSquare, Navi
 import { cn } from '@/lib/utils';
 import { ChatDialog } from '@/components/chat/ChatDialog';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/useToast';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -193,6 +194,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const { data: events, isLoading, error } = useEphemeralEvents();
   const [mapCenter, setMapCenter] = useState<LatLngExpression>([40.7128, -74.0060]); // Default to NYC
   const [highlightedGeohash, setHighlightedGeohash] = useState<string | null>(null);
+  const { toast } = useToast();
   const [chatDialog, setChatDialog] = useState<{
     isOpen: boolean;
     geohash: string;
@@ -296,7 +298,11 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         setTeleportGeohash('');
       } else {
         // Invalid geohash format
-        alert('Please enter a valid geohash (alphanumeric characters only)');
+        toast({
+          title: "Invalid Geohash",
+          description: "Please enter a valid geohash (alphanumeric characters only)",
+          variant: "destructive",
+        });
       }
     }
   };
@@ -428,7 +434,6 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         isOpen={chatDialog.isOpen}
         onClose={handleCloseChat}
         geohash={chatDialog.geohash}
-        _initialEvents={chatDialog.initialEvents}
       />
 
       {/* Teleport Dialog */}

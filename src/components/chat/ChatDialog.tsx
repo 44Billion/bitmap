@@ -13,17 +13,15 @@ import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/hooks/useToast';
 
-import type { EphemeralEventData } from '@/hooks/useEphemeralEvents';
 import type { EphemeralEventMessage } from '@/hooks/useChatSession';
 
 interface ChatDialogProps {
   isOpen: boolean;
   onClose: () => void;
   geohash: string;
-  _initialEvents?: EphemeralEventData[];
 }
 
-export function ChatDialog({ isOpen, onClose, geohash, _initialEvents = [] }: ChatDialogProps) {
+export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   const [message, setMessage] = useState('');
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');

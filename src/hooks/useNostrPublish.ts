@@ -2,6 +2,7 @@ import { useNostr } from "@nostrify/react";
 import { useMutation, type UseMutationResult } from "@tanstack/react-query";
 
 import { useCurrentUser } from "./useCurrentUser";
+import { isCompleteRelayFailure } from "@/lib/utils";
 
 import type { NostrEvent } from "@nostrify/nostrify";
 
@@ -29,15 +30,7 @@ export function useNostrPublish(): UseMutationResult<NostrEvent> {
         try {
           await nostr.event(event, { signal: AbortSignal.timeout(5000) });
         } catch (error) {
-          // Check if the error indicates complete failure vs partial failure
-          // If it's a timeout or network error, it might be a partial failure
-          const isCompleteFailure = error instanceof Error && (
-            error.message.includes('All relays failed') ||
-            error.message.includes('No relays available') ||
-            error.message.includes('Connection failed')
-          );
-
-          if (isCompleteFailure) {
+          if (isCompleteRelayFailure(error)) {
             throw error; // Re-throw complete failures
           }
 

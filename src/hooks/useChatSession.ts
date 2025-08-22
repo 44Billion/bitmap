@@ -4,6 +4,7 @@ import { useNostr } from '@nostrify/react';
 import { useCurrentUser } from './useCurrentUser';
 import { useEphemeralIdentity } from './useEphemeralIdentity';
 import { finalizeEvent } from 'nostr-tools';
+import { isCompleteRelayFailure } from '@/lib/utils';
 import type { NostrEvent } from '@nostrify/nostrify';
 
 export interface EphemeralEventMessage {
@@ -218,15 +219,7 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
         queryClient.setQueryData(chatKey, [...existingMessages, newMessage]);
         return true;
       } catch (publishError) {
-        // Check if this is a complete failure (all relays failed) vs partial failure
-        const isCompleteFailure = publishError instanceof Error && (
-          publishError.message.includes('All relays failed') ||
-          publishError.message.includes('No relays available') ||
-          publishError.message.includes('Connection failed') ||
-          publishError.message.includes('timeout') && publishError.message.includes('all relays')
-        );
-
-        if (isCompleteFailure) {
+        if (isCompleteRelayFailure(publishError)) {
           console.error('All relays failed to receive the message:', publishError);
           return false; // Only return false if ALL relays failed
         }
