@@ -1,6 +1,57 @@
+/* Leaflet CSS */
+@import 'leaflet/dist/leaflet.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Ensure Leaflet map renders properly */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background-color: black !important;
+}
+
+/* Custom Leaflet popup styling for dark theme */
+.leaflet-popup-content-wrapper {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-tip {
+  background: rgba(0, 0, 0, 0.9) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.leaflet-popup-close-button {
+  color: #00ffff !important;
+  font-size: 14px !important;
+  font-weight: bold !important;
+  padding: 2px 6px !important;
+  background: rgba(0, 0, 0, 0.8) !important;
+  border: 1px solid rgba(0, 255, 255, 0.3) !important;
+  border-radius: 4px !important;
+  right: 4px !important;
+  top: 4px !important;
+  width: auto !important;
+  height: auto !important;
+  line-height: 1 !important;
+  text-align: center !important;
+}
+
+.leaflet-popup-close-button:hover {
+  background: rgba(0, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
 
 @layer base {
   :root {
