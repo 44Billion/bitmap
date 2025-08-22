@@ -104,7 +104,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl h-[600px] bg-black border border-green-500/30 flex flex-col pb-0">
+      <DialogContent className="max-w-2xl h-[600px] bg-black border border-green-500/30 flex flex-col pb-0 overflow-hidden">
         <DialogHeader className="border-b border-green-500/20 pb-4">
           <DialogTitle className="flex items-center gap-2 text-green-400 font-mono">
             <Activity className="h-5 w-5" />
@@ -173,14 +173,14 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
           <ScrollArea className="flex-1 px-4 py-2 font-mono text-xs" ref={scrollRef}>
             <div className="space-y-1">
               {isMessagesLoading ? (
-                <div className="text-green-500 py-2">
+                <div className="text-green-500 py-2 w-full">
                   <span className="animate-pulse">[CONNECTING] </span>
-                  <span>Establishing secure channel...</span>
+                  <span className="whitespace-pre-wrap break-words">Establishing secure channel...</span>
                 </div>
               ) : chatMessages.length === 0 ? (
-                <div className="text-gray-500 py-2">
+                <div className="text-gray-500 py-2 w-full">
                   <span className="text-green-500">[SYSTEM] </span>
-                  <span>No messages in channel. Be the first to transmit.</span>
+                  <span className="whitespace-pre-wrap break-words">No messages in channel. Be the first to transmit.</span>
                 </div>
               ) : (
                 chatMessages.map((msg) => {
@@ -193,7 +193,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                   });
 
                   return (
-                    <div key={msg.event.id} className="leading-relaxed">
+                    <div key={msg.event.id} className="leading-relaxed w-full">
                       <span className="text-gray-500">[{timestamp}] </span>
                       {isOwn ? (
                         <span className="text-cyan-400">
@@ -204,7 +204,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                           &lt;{authorNickname}&gt;
                         </span>
                       )}
-                      <span className="text-gray-300">{msg.message}</span>
+                      <span className="text-gray-300 whitespace-pre-wrap break-words">{msg.message}</span>
                     </div>
                   );
                 })
