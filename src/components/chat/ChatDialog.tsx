@@ -4,11 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card, CardContent } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Send, MapPin, Activity, Shield, User as UserIcon, Loader2, Edit2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2 } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/hooks/useToast';
