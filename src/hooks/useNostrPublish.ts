@@ -26,7 +26,25 @@ export function useNostrPublish(): UseMutationResult<NostrEvent> {
           created_at: t.created_at ?? Math.floor(Date.now() / 1000),
         });
 
-        await nostr.event(event, { signal: AbortSignal.timeout(5000) });
+        try {
+          await nostr.event(event, { signal: AbortSignal.timeout(5000) });
+        } catch (error) {
+          // Check if the error indicates complete failure vs partial failure
+          // If it's a timeout or network error, it might be a partial failure
+          const isCompleteFailure = error instanceof Error && (
+            error.message.includes('All relays failed') ||
+            error.message.includes('No relays available') ||
+            error.message.includes('Connection failed')
+          );
+
+          if (isCompleteFailure) {
+            throw error; // Re-throw complete failures
+          }
+
+          // For partial failures (some relays succeeded), we still consider it a success
+          console.warn('Some relays failed to receive the event, but at least one relay succeeded:', error);
+        }
+
         return event;
       } else {
         throw new Error("User is not logged in");

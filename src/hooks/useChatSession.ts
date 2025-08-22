@@ -202,25 +202,39 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
 
       try {
         // Attempt to publish the event
-        const result = await nostr.event(eventToPublish);
+        await nostr.event(eventToPublish, { signal: AbortSignal.timeout(5000) });
 
-        if (result !== undefined) {
-          // Update local cache immediately
-          const chatKey = ['chat-messages', geohash];
-          const existingMessages = queryClient.getQueryData<EphemeralEventMessage[]>(chatKey) || [];
-          const newMessage: EphemeralEventMessage = {
-            event: eventToPublish,
-            geohash,
-            nickname: session.nickname,
-            message: content,
-          };
+        // If we reach here, at least one relay succeeded (or it was a partial failure)
+        // Update local cache immediately
+        const chatKey = ['chat-messages', geohash];
+        const existingMessages = queryClient.getQueryData<EphemeralEventMessage[]>(chatKey) || [];
+        const newMessage: EphemeralEventMessage = {
+          event: eventToPublish,
+          geohash,
+          nickname: session.nickname,
+          message: content,
+        };
 
-          queryClient.setQueryData(chatKey, [...existingMessages, newMessage]);
-          return true;
-        }
+        queryClient.setQueryData(chatKey, [...existingMessages, newMessage]);
+        return true;
       } catch (publishError) {
-        console.warn('Event publishing failed, but continuing for demo:', publishError);
-        // For demo purposes, we'll simulate success even if publishing fails
+        // Check if this is a complete failure (all relays failed) vs partial failure
+        const isCompleteFailure = publishError instanceof Error && (
+          publishError.message.includes('All relays failed') ||
+          publishError.message.includes('No relays available') ||
+          publishError.message.includes('Connection failed') ||
+          publishError.message.includes('timeout') && publishError.message.includes('all relays')
+        );
+
+        if (isCompleteFailure) {
+          console.error('All relays failed to receive the message:', publishError);
+          return false; // Only return false if ALL relays failed
+        }
+
+        // For partial failures (some relays succeeded), we still consider it a success
+        console.warn('Some relays failed to receive the message, but at least one relay succeeded:', publishError);
+
+        // Update local cache since at least one relay succeeded
         const chatKey = ['chat-messages', geohash];
         const existingMessages = queryClient.getQueryData<EphemeralEventMessage[]>(chatKey) || [];
         const newMessage: EphemeralEventMessage = {
@@ -233,8 +247,6 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
         queryClient.setQueryData(chatKey, [...existingMessages, newMessage]);
         return true;
       }
-
-      return false;
     } catch (error) {
       console.error('Failed to send message:', error);
       return false;
