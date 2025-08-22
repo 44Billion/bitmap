@@ -107,7 +107,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl h-[600px] bg-black border border-green-500/30 flex flex-col">
+      <DialogContent className="max-w-2xl h-[600px] bg-black border border-green-500/30 flex flex-col pb-0">
         <DialogHeader className="border-b border-green-500/20 pb-4">
           <DialogTitle className="flex items-center gap-2 text-green-400 font-mono">
             <Activity className="h-5 w-5" />
@@ -172,65 +172,42 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
         </DialogHeader>
 
         <div className="flex-1 flex flex-col min-h-0">
-          {/* Messages area */}
-          <ScrollArea className="flex-1 px-4 py-2" ref={scrollRef}>
-            <div className="space-y-3">
+          {/* Messages area - Terminal style */}
+          <ScrollArea className="flex-1 px-4 py-2 font-mono text-xs" ref={scrollRef}>
+            <div className="space-y-1">
               {isMessagesLoading ? (
-                <div className="text-center text-gray-500 text-sm py-8 flex flex-col items-center gap-2">
-                  <Loader2 className="h-6 w-6 animate-spin text-green-400" />
-                  <div>Loading chat messages...</div>
+                <div className="text-green-500 py-2">
+                  <span className="animate-pulse">[CONNECTING] </span>
+                  <span>Establishing secure channel...</span>
                 </div>
               ) : chatMessages.length === 0 ? (
-                <div className="text-center text-gray-500 text-sm py-8">
-                  No messages yet. Start the conversation!
+                <div className="text-gray-500 py-2">
+                  <span className="text-green-500">[SYSTEM] </span>
+                  <span>No messages in channel. Be the first to transmit.</span>
                 </div>
               ) : (
                 chatMessages.map((msg) => {
                   const isOwn = user?.pubkey === msg.event.pubkey;
                   const authorNickname = msg.nickname || 'anonymous';
+                  const timestamp = new Date(msg.event.created_at * 1000).toLocaleTimeString('en-US', {
+                    hour12: false,
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
 
                   return (
-                    <div
-                      key={msg.event.id}
-                      className={cn(
-                        "flex gap-2 max-w-[80%]",
-                        isOwn ? "ml-auto" : "mr-auto"
+                    <div key={msg.event.id} className="leading-relaxed">
+                      <span className="text-gray-500">[{timestamp}] </span>
+                      {isOwn ? (
+                        <span className="text-cyan-400">
+                          &lt;{session?.nickname || 'user'}&gt;
+                        </span>
+                      ) : (
+                        <span className="text-green-400">
+                          &lt;{authorNickname}&gt;
+                        </span>
                       )}
-                    >
-                      {!isOwn && (
-                        <Avatar className="h-6 w-6 flex-shrink-0">
-                          <AvatarFallback className="text-xs bg-green-500/20 text-green-400">
-                            {authorNickname[0] || '?'}
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                      <Card className={cn(
-                        "text-xs",
-                        isOwn
-                          ? "bg-green-500/20 border-green-500/50"
-                          : "bg-gray-800/50 border-gray-700"
-                      )}>
-                        <CardContent className="p-2">
-                          {!isOwn && authorNickname && (
-                            <div className="text-cyan-400 font-mono text-[10px] mb-1">
-                              {authorNickname}
-                            </div>
-                          )}
-                          <div className="text-gray-200 break-words">
-                            {msg.message}
-                          </div>
-                          <div className="text-gray-500 text-[9px] mt-1">
-                            {new Date(msg.event.created_at * 1000).toLocaleTimeString()}
-                          </div>
-                        </CardContent>
-                      </Card>
-                      {isOwn && (
-                        <Avatar className="h-6 w-6 flex-shrink-0">
-                          <AvatarFallback className="text-xs bg-cyan-500/20 text-cyan-400">
-                            {session?.nickname?.[0] || '?'}
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
+                      <span className="text-gray-300">{msg.message}</span>
                     </div>
                   );
                 })
