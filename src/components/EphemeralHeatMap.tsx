@@ -503,6 +503,15 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         >
           MKStack
         </a>
+        {' '} & {' '}
+        <a
+          href="https://shakespeare.diy"
+          className="text-cyan-400 hover:text-cyan-300 transition-colors"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Shakespeare
+        </a>
       </div>
     </div>
   );
