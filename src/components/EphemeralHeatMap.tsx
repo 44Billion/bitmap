@@ -4,8 +4,10 @@ import { decode, decode_bbox } from 'ngeohash';
 import type { LatLngExpression } from 'leaflet';
 import L from 'leaflet';
 import { useEphemeralEvents, type EphemeralEventData } from '@/hooks/useEphemeralEvents';
-import { AlertTriangle, Activity, MapPin, User, Plus, Minus } from 'lucide-react';
+import { AlertTriangle, Activity, MapPin, User, Plus, Minus, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ChatDialog } from '@/components/chat/ChatDialog';
+import { Button } from '@/components/ui/button';
 
 interface HeatMapPoint {
   lat: number;
@@ -111,7 +113,10 @@ function MapBoundaryEnforcer() {
   return null;
 }
 
-const EventPopup = React.memo(({ point }: { point: HeatMapPoint }) => {
+const EventPopup = React.memo(({ point, onOpenChat }: {
+  point: HeatMapPoint;
+  onOpenChat: (geohash: string, events: EphemeralEventData[]) => void;
+}) => {
   const latestEvent = point.events[0];
   const eventCount = point.events.length;
 
@@ -163,6 +168,20 @@ const EventPopup = React.memo(({ point }: { point: HeatMapPoint }) => {
           TIMESTAMP: {new Date(latestEvent.event.created_at * 1000).toLocaleString()}
         </div>
       </div>
+
+      {/* Chat button */}
+      {latestEvent.geohash && (
+        <div className="mt-3 pt-2 border-t border-green-500/20">
+          <Button
+            onClick={() => onOpenChat(latestEvent.geohash!, point.events)}
+            size="sm"
+            className="w-full bg-cyan-500/20 hover:bg-cyan-500/30 border-cyan-500/50 text-cyan-400 text-xs h-7"
+          >
+            <MessageSquare className="h-3 w-3 mr-1" />
+            OPEN CHAT
+          </Button>
+        </div>
+      )}
     </div>
   );
 });
@@ -171,6 +190,11 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const { data: events, isLoading, error } = useEphemeralEvents();
   const [mapCenter, setMapCenter] = useState<LatLngExpression>([40.7128, -74.0060]); // Default to NYC
   const [highlightedGeohash, setHighlightedGeohash] = useState<string | null>(null);
+  const [chatDialog, setChatDialog] = useState<{
+    isOpen: boolean;
+    geohash: string;
+    initialEvents: EphemeralEventData[];
+  }>({ isOpen: false, geohash: '', initialEvents: [] });
   const mapRef = React.useRef<L.Map | null>(null);
 
   // Process events into heat map points
@@ -233,6 +257,19 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   };
 
   const maxIntensity = Math.max(...heatMapPoints.map(p => p.intensity), 1);
+
+  // Chat dialog handlers
+  const handleOpenChat = (geohash: string, events: EphemeralEventData[]) => {
+    setChatDialog({
+      isOpen: true,
+      geohash,
+      initialEvents: events,
+    });
+  };
+
+  const handleCloseChat = () => {
+    setChatDialog(prev => ({ ...prev, isOpen: false }));
+  };
 
   if (isLoading) {
     return (
@@ -318,7 +355,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
                 }
               }}
             >
-              <EventPopup point={point} />
+              <EventPopup point={point} onOpenChat={handleOpenChat} />
             </Popup>
           </CircleMarker>
         ))}
@@ -339,6 +376,14 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
           <span>LIVE - {events?.length || 0} EVENTS</span>
         </div>
       </div>
+
+      {/* Chat Dialog */}
+      <ChatDialog
+        isOpen={chatDialog.isOpen}
+        onClose={handleCloseChat}
+        geohash={chatDialog.geohash}
+        _initialEvents={chatDialog.initialEvents}
+      />
 
       {/* Footer */}
       <div className="absolute bottom-4 right-4 text-xs font-mono text-gray-500 z-10">

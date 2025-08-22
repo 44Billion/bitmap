@@ -32,14 +32,15 @@ const queryClient = new QueryClient({
 
 const defaultConfig: AppConfig = {
   theme: "light",
-  relayUrl: "wss://relay.primal.net",
+  relayUrl: "wss://nos.lol",
 };
 
 const presetRelays = [
-  { url: 'wss://ditto.pub/relay', name: 'Ditto' },
-  { url: 'wss://relay.nostr.band', name: 'Nostr.Band' },
   { url: 'wss://relay.damus.io', name: 'Damus' },
+  { url: 'wss://nos.lol', name: 'Nos.lol' },
   { url: 'wss://relay.primal.net', name: 'Primal' },
+  { url: 'wss://offchain.pub', name: 'Offchain' },
+  { url: 'wss://nostr21.com', name: 'Nostr21' },
 ];
 
 export function App() {
