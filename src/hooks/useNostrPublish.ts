@@ -2,6 +2,7 @@ import { useNostr } from "@nostrify/react";
 import { useMutation, type UseMutationResult } from "@tanstack/react-query";
 
 import { useCurrentUser } from "./useCurrentUser";
+import { isCompleteRelayFailure } from "@/lib/utils";
 
 import type { NostrEvent } from "@nostrify/nostrify";
 
@@ -26,7 +27,17 @@ export function useNostrPublish(): UseMutationResult<NostrEvent> {
           created_at: t.created_at ?? Math.floor(Date.now() / 1000),
         });
 
-        await nostr.event(event, { signal: AbortSignal.timeout(5000) });
+        try {
+          await nostr.event(event, { signal: AbortSignal.timeout(5000) });
+        } catch (error) {
+          if (isCompleteRelayFailure(error)) {
+            throw error; // Re-throw complete failures
+          }
+
+          // For partial failures (some relays succeeded), we still consider it a success
+          console.warn('Some relays failed to receive the event, but at least one relay succeeded:', error);
+        }
+
         return event;
       } else {
         throw new Error("User is not logged in");

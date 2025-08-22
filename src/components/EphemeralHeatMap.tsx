@@ -4,8 +4,14 @@ import { decode, decode_bbox } from 'ngeohash';
 import type { LatLngExpression } from 'leaflet';
 import L from 'leaflet';
 import { useEphemeralEvents, type EphemeralEventData } from '@/hooks/useEphemeralEvents';
-import { AlertTriangle, Activity, MapPin, User, Plus, Minus } from 'lucide-react';
+import { AlertTriangle, Activity, MapPin, User, Plus, Minus, MessageSquare, Navigation } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ChatDialog } from '@/components/chat/ChatDialog';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/useToast';
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 interface HeatMapPoint {
   lat: number;
@@ -111,7 +117,10 @@ function MapBoundaryEnforcer() {
   return null;
 }
 
-const EventPopup = React.memo(({ point }: { point: HeatMapPoint }) => {
+const EventPopup = React.memo(({ point, onOpenChat }: {
+  point: HeatMapPoint;
+  onOpenChat: (geohash: string, events: EphemeralEventData[]) => void;
+}) => {
   const latestEvent = point.events[0];
   const eventCount = point.events.length;
 
@@ -163,6 +172,20 @@ const EventPopup = React.memo(({ point }: { point: HeatMapPoint }) => {
           TIMESTAMP: {new Date(latestEvent.event.created_at * 1000).toLocaleString()}
         </div>
       </div>
+
+      {/* Chat button */}
+      {latestEvent.geohash && (
+        <div className="mt-3 pt-2 border-t border-green-500/20">
+          <Button
+            onClick={() => onOpenChat(latestEvent.geohash!, point.events)}
+            size="sm"
+            className="w-full bg-cyan-500/20 hover:bg-cyan-500/30 border-cyan-500/50 text-cyan-400 text-xs h-7"
+          >
+            <MessageSquare className="h-3 w-3 mr-1" />
+            OPEN CHAT
+          </Button>
+        </div>
+      )}
     </div>
   );
 });
@@ -171,6 +194,14 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const { data: events, isLoading, error } = useEphemeralEvents();
   const [mapCenter, setMapCenter] = useState<LatLngExpression>([40.7128, -74.0060]); // Default to NYC
   const [highlightedGeohash, setHighlightedGeohash] = useState<string | null>(null);
+  const { toast } = useToast();
+  const [chatDialog, setChatDialog] = useState<{
+    isOpen: boolean;
+    geohash: string;
+    initialEvents: EphemeralEventData[];
+  }>({ isOpen: false, geohash: '', initialEvents: [] });
+  const [isTeleportOpen, setIsTeleportOpen] = useState(false);
+  const [teleportGeohash, setTeleportGeohash] = useState('');
   const mapRef = React.useRef<L.Map | null>(null);
 
   // Process events into heat map points
@@ -233,6 +264,53 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   };
 
   const maxIntensity = Math.max(...heatMapPoints.map(p => p.intensity), 1);
+
+  // Chat dialog handlers
+  const handleOpenChat = (geohash: string, events: EphemeralEventData[]) => {
+    setChatDialog({
+      isOpen: true,
+      geohash,
+      initialEvents: events,
+    });
+  };
+
+  const handleCloseChat = () => {
+    setChatDialog(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Teleport dialog handlers
+  const handleOpenTeleport = () => {
+    setIsTeleportOpen(true);
+    setTeleportGeohash('');
+  };
+
+  const handleTeleport = () => {
+    if (teleportGeohash.trim()) {
+      // Validate geohash format (alphanumeric, any length)
+      if (/^[a-zA-Z0-9]+$/.test(teleportGeohash.trim())) {
+        // Open chat dialog for teleport geohash
+        setChatDialog({
+          isOpen: true,
+          geohash: teleportGeohash.trim(),
+          initialEvents: [],
+        });
+        setIsTeleportOpen(false);
+        setTeleportGeohash('');
+      } else {
+        // Invalid geohash format
+        toast({
+          title: "Invalid Geohash",
+          description: "Please enter a valid geohash (alphanumeric characters only)",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const handleCloseTeleport = () => {
+    setIsTeleportOpen(false);
+    setTeleportGeohash('');
+  };
 
   if (isLoading) {
     return (
@@ -318,7 +396,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
                 }
               }}
             >
-              <EventPopup point={point} />
+              <EventPopup point={point} onOpenChat={handleOpenChat} />
             </Popup>
           </CircleMarker>
         ))}
@@ -339,6 +417,72 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
           <span>LIVE - {events?.length || 0} EVENTS</span>
         </div>
       </div>
+      {/* Teleport button */}
+      <Button
+        onClick={handleOpenTeleport}
+        size="sm"
+        className="absolute top-16 right-4 bg-black/80 border border-cyan-500/30 rounded-lg p-2 font-mono text-xs z-10"
+      >
+          <div className="flex items-center gap-2 text-cyan-400">
+            <Navigation className="h-2 w-2 animate-pulse" />
+            <span>TELEPORT</span>
+          </div>
+      </Button>
+
+      {/* Chat Dialog */}
+      <ChatDialog
+        isOpen={chatDialog.isOpen}
+        onClose={handleCloseChat}
+        geohash={chatDialog.geohash}
+      />
+
+      {/* Teleport Dialog */}
+      <Dialog open={isTeleportOpen} onOpenChange={handleCloseTeleport}>
+        <DialogContent className="max-w-md bg-black border border-green-500/30">
+          <DialogHeader className="border-b border-green-500/20 pb-4">
+            <DialogTitle className="flex items-center gap-2 text-green-400 font-mono">
+              <Navigation className="h-5 w-5" />
+              TELEPORT TO GEOHASH
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 p-4">
+            <div className="space-y-2">
+              <label className="text-xs text-gray-400 font-mono">
+                Enter Geohash
+              </label>
+              <Input
+                value={teleportGeohash}
+                onChange={(e) => setTeleportGeohash(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') handleTeleport();
+                  if (e.key === 'Escape') handleCloseTeleport();
+                }}
+                placeholder="e.g., dr5reg1"
+                className="bg-black/50 border-green-500/30 text-green-400 placeholder:text-green-500/50 font-mono"
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 font-mono">
+                Geohash should contain only alphanumeric characters (a-z, A-Z, 0-9)
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                onClick={handleCloseTeleport}
+                variant="outline"
+                className="border-gray-600 text-gray-400 hover:bg-gray-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleTeleport}
+                className="bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400"
+              >
+                Teleport
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Footer */}
       <div className="absolute bottom-4 right-4 text-xs font-mono text-gray-500 z-10">
