@@ -348,9 +348,9 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
           target="_blank"
           rel="noopener noreferrer"
         >
-          Bitmap |
+          Bitmap
         </a>
-        {' '}Vibed with{' '}
+        {' '} | Vibed with{' '}
         <a
           href="https://soapbox.pub/mkstack"
           className="text-cyan-400 hover:text-cyan-300 transition-colors"
