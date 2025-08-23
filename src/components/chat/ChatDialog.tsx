@@ -59,6 +59,8 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   // Handle scroll events
   const handleScroll = useCallback(() => {
     checkIsAtBottom();
+    // Hide scroll button as soon as user starts scrolling down
+    setShowScrollButton(false);
   }, [checkIsAtBottom]);
 
   // Add scroll event listener to viewport
@@ -68,6 +70,8 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
       if (viewport) {
         const handleViewportScroll = () => {
           checkIsAtBottom();
+          // Hide scroll button as soon as user starts scrolling down
+          setShowScrollButton(false);
         };
 
         viewport.addEventListener('scroll', handleViewportScroll, { passive: true });
