@@ -198,15 +198,12 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl h-[600px] bg-black border border-green-500/30 flex flex-col pb-0 overflow-hidden">
+      <DialogContent className="max-w-2xl h-full sm:h-[600px] bg-black border border-green-500/30 flex flex-col p-4 pb-0 sm:p-6 sm:pb-0 overflow-hidden">
         <DialogHeader className="border-b border-green-500/20 pb-4">
           <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2 text-green-400 font-mono">
-              <Activity className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-green-400 font-mono text-md sm:text-xl">
+              <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
               BITCHAT SESSION
-              <Badge variant="outline" className="text-[10px] border-cyan-500/50 text-cyan-400">
-                {geohash}
-              </Badge>
             </DialogTitle>
             <div className="flex items-center gap-2">
               {/* Spam filter toggle */}
@@ -245,7 +242,8 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
           <div className="flex items-center gap-4 text-xs text-gray-400 font-mono">
             <div className="flex items-center gap-1">
               <MapPin className="h-3 w-3" />
-              <span>Geohash: {geohash}</span>
+              <span className="hidden sm:flex">Geohash: {geohash}</span>
+              <span className="sm:hidden">{geohash}</span>
             </div>
             <div className="flex items-center gap-1">
               {user ? (
@@ -269,14 +267,14 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                   <Button
                     onClick={handleSaveNickname}
                     size="sm"
-                    className="h-5 w-5 bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400 p-0"
+                    className="h-6 w-6 bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400 p-0"
                   >
                     ✓
                   </Button>
                   <Button
                     onClick={handleCancelEditNickname}
                     size="sm"
-                    className="h-5 w-5 bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-400 p-0"
+                    className="h-6 w-6 bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-400 p-0"
                   >
                     ✕
                   </Button>
@@ -299,12 +297,12 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
 
         <div className="flex-1 flex flex-col min-h-0">
           {/* Messages area - Terminal style */}
-          <ScrollArea className="flex-1 px-4 py-2 font-mono text-xs relative" ref={scrollRef}>
+          <ScrollArea className="flex-1 pb-2 font-mono text-xs relative" ref={scrollRef}>
             <div className="space-y-1">
               {isMessagesLoading ? (
                 <div className="text-green-500 py-2 w-full">
                   <span className="animate-pulse">[CONNECTING] </span>
-                  <span className="whitespace-pre-wrap break-all overflow-wrap-anywhere">Establishing secure channel...</span>
+                  <span className="whitespace-pre-wrap break-all overflow-wrap-anywhere">Establishing connection to channel...</span>
                 </div>
               ) : chatMessages.length === 0 ? (
                 <div className="text-gray-500 py-2 w-full">
@@ -361,7 +359,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
               <Button
                 onClick={scrollToBottom}
                 size="sm"
-                className="absolute bottom-4 right-4 h-8 w-8 p-0 bg-green-500/90 hover:bg-green-500 border-green-500/50 text-green-900 shadow-lg rounded-sm transition-all duration-200 hover:scale-110 z-10"
+                className="absolute bottom-4 right-0 sm:right-4 h-8 w-8 p-0 bg-green-500/90 hover:bg-green-500 border-green-500/50 text-green-900 shadow-lg rounded-sm transition-all duration-200 hover:scale-110 z-10"
                 title="Scroll to bottom"
               >
                 <ChevronDown className="h-4 w-4" />
@@ -370,7 +368,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
           </ScrollArea>
 
           {/* Input area */}
-          <div className="border-t border-green-500/20 p-4">
+          <div className="border-t border-green-500/20 py-4">
             <div className="flex gap-2">
               <Input
                 value={message}
