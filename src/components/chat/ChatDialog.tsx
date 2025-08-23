@@ -27,6 +27,8 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previousMessageCountRef = useRef(0);
   const { session, sendMessage: sendChatMessage, isLoading, updateNickname } = useChatSession(geohash);
   const { user, metadata } = useCurrentUser();
   const { toast } = useToast();
@@ -62,6 +64,9 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   useEffect(() => {
     if (!isOpen) return;
 
+    // Reset previous message count when dialog opens
+    previousMessageCountRef.current = 0;
+
     const handleScroll = () => {
       checkIsAtBottom();
       setShowScrollButton(false);
@@ -74,6 +79,11 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
     checkIsAtBottom();
 
     return () => {
+      // Clean up any pending scroll timeout when dialog closes
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
       // Remove scroll listener when dialog closes
       document.removeEventListener('scroll', handleScroll, { capture: true });
     };
@@ -81,18 +91,39 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
 
   // Auto-scroll to bottom when messages change, but only if user is already at bottom
   useEffect(() => {
-    if (chatMessages.length > 0) {
-      const wasAtBottom = checkIsAtBottom();
-      if (wasAtBottom && scrollRef.current) {
-        const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-        if (viewport) {
-          (viewport as HTMLElement).scrollTop = (viewport as HTMLElement).scrollHeight;
-        }
-      } else if (!wasAtBottom) {
-        // Show scroll button if new messages arrive and user is not at bottom
-        setShowScrollButton(true);
+    if (chatMessages.length === 0) return;
+
+    const wasAtBottom = checkIsAtBottom();
+    const newMessageCount = chatMessages.length - previousMessageCountRef.current;
+
+    // Update the previous message count
+    previousMessageCountRef.current = chatMessages.length;
+
+    if (wasAtBottom && scrollRef.current) {
+      // Clear any pending scroll timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
       }
+
+      // Use a timeout to batch rapid messages and ensure DOM is fully updated
+      scrollTimeoutRef.current = setTimeout(() => {
+        if (scrollRef.current) {
+          const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+          if (viewport) {
+            (viewport as HTMLElement).scrollTop = (viewport as HTMLElement).scrollHeight;
+          }
+        }
+      }, newMessageCount > 1 ? 100 : 0); // Longer delay for multiple messages
+    } else if (!wasAtBottom) {
+      // Show scroll button if new messages arrive and user is not at bottom
+      setShowScrollButton(true);
     }
+
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
   }, [chatMessages, checkIsAtBottom]);
 
   // Hide scroll button when user manually scrolls to bottom
