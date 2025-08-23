@@ -175,12 +175,12 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
               {isMessagesLoading ? (
                 <div className="text-green-500 py-2 w-full">
                   <span className="animate-pulse">[CONNECTING] </span>
-                  <span className="whitespace-pre-wrap break-words">Establishing secure channel...</span>
+                  <span className="whitespace-pre-wrap break-all overflow-wrap-anywhere">Establishing secure channel...</span>
                 </div>
               ) : chatMessages.length === 0 ? (
                 <div className="text-gray-500 py-2 w-full">
                   <span className="text-green-500">[SYSTEM] </span>
-                  <span className="whitespace-pre-wrap break-words">No messages in channel. Be the first to transmit.</span>
+                  <span className="whitespace-pre-wrap break-all overflow-wrap-anywhere">No messages in channel. Be the first to transmit.</span>
                 </div>
               ) : (
                 chatMessages.map((msg) => {
@@ -204,7 +204,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                           &lt;{authorNickname}&gt;
                         </span>
                       )}
-                      <span className="text-gray-300 whitespace-pre-wrap break-words">{msg.message}</span>
+                      <span className="text-gray-300 whitespace-pre-wrap break-all overflow-wrap-anywhere">{msg.message}</span>
                     </div>
                   );
                 })

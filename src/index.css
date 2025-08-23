@@ -150,3 +150,20 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom styles for chat message text wrapping */
+.text-content {
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: break-all !important;
+  white-space: pre-wrap !important;
+}
+
+/* Ensure long strings break properly in chat messages */
+.break-all {
+  word-break: break-all !important;
+}
+
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere !important;
+}
