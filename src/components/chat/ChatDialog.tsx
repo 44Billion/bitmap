@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2, X } from 'lucide-react';
+import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2, X, Swords, Flower } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/hooks/useToast';
+import { isLikelySpam } from '@/lib/utils';
 
 import type { EphemeralEventMessage } from '@/hooks/useChatSession';
 
@@ -22,6 +23,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   const [message, setMessage] = useState('');
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
+  const [hideSpam, setHideSpam] = useState(true); // Default to hiding spam
   const scrollRef = useRef<HTMLDivElement>(null);
   const { session, sendMessage: sendChatMessage, isLoading, updateNickname } = useChatSession(geohash);
   const { user, metadata } = useCurrentUser();
@@ -114,16 +116,39 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                 {geohash}
               </Badge>
             </DialogTitle>
-            <DialogClose asChild>
+            <div className="flex items-center gap-2">
+              {/* Spam filter toggle */}
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-green-500 hover:text-green-400 hover:bg-green-500/20 rounded-sm"
+                onClick={() => setHideSpam(!hideSpam)}
+                className={`h-6 w-6 p-0 ${
+                  hideSpam
+                    ? "text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                    : "text-orange-400 hover:text-orange-300 hover:bg-orange-500/10"
+                }`}
+                title={hideSpam ? "Spam filtering: ON (click to disable)" : "Spam filtering: OFF (click to enable)"}
               >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
+                {hideSpam ? (
+                  <Flower className="h-3 w-3" />
+                ) : (
+                  <Swords className="h-3 w-3" />
+                )}
+                <span className="sr-only">
+                  {hideSpam ? "Spam filtering enabled" : "Spam filtering disabled"}
+                </span>
               </Button>
-            </DialogClose>
+              <DialogClose asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-green-500 hover:text-green-400 hover:bg-green-500/20 rounded-sm"
+                >
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close</span>
+                </Button>
+              </DialogClose>
+            </div>
           </div>
           <div className="flex items-center gap-4 text-xs text-gray-400 font-mono">
             <div className="flex items-center gap-1">
@@ -194,33 +219,49 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                   <span className="text-green-500">[SYSTEM] </span>
                   <span className="whitespace-pre-wrap break-all overflow-wrap-anywhere">No messages in channel. Be the first to transmit.</span>
                 </div>
-              ) : (
-                chatMessages.map((msg) => {
-                  const isOwn = user?.pubkey === msg.event.pubkey;
-                  const authorNickname = msg.nickname || 'anonymous';
-                  const timestamp = new Date(msg.event.created_at * 1000).toLocaleTimeString('en-US', {
-                    hour12: false,
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  });
+              ) : (() => {
+                const filteredMessages = chatMessages.filter(msg => !hideSpam || !isLikelySpam(msg));
+                const spamMessagesCount = chatMessages.filter(msg => isLikelySpam(msg)).length;
 
-                  return (
-                    <div key={msg.event.id} className="leading-relaxed w-full">
-                      <span className="text-gray-500">[{timestamp}] </span>
-                      {isOwn ? (
-                        <span className="text-cyan-400">
-                          &lt;{session?.nickname || 'user'}&gt;
+                return (
+                  <>
+                    {/* Show spam filter status message */}
+                    {hideSpam && spamMessagesCount > 0 && (
+                      <div className="text-gray-500/50 py-1 w-full text-xs">
+                        <span className="text-green-500/30">🌸 </span>
+                        <span className="text-gray-500/40">
+                          {spamMessagesCount} filtered
                         </span>
-                      ) : (
-                        <span className="text-green-400">
-                          &lt;{authorNickname}&gt;
-                        </span>
-                      )}
-                      <span className="text-gray-300 whitespace-pre-wrap break-all overflow-wrap-anywhere">{msg.message}</span>
-                    </div>
-                  );
-                })
-              )}
+                      </div>
+                    )}
+                    {filteredMessages.map((msg) => {
+                      const isOwn = user?.pubkey === msg.event.pubkey;
+                      const authorNickname = msg.nickname || 'anonymous';
+                      const timestamp = new Date(msg.event.created_at * 1000).toLocaleTimeString('en-US', {
+                        hour12: false,
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+
+                      return (
+                        <div key={msg.event.id} className="leading-relaxed w-full">
+                          <span className="text-gray-500">[{timestamp}] </span>
+                          {isOwn ? (
+                            <span className="text-cyan-400">
+                              &lt;{session?.nickname || 'user'}&gt;
+                            </span>
+                          ) : (
+                            <span className="text-green-400">
+                              &lt;{authorNickname}&gt;
+                            </span>
+                          )}
+                          <span className="text-gray-300 whitespace-pre-wrap break-all overflow-wrap-anywhere">{msg.message}</span>
+                        </div>
+                      );
+                    })}
+                  </>
+                );
+              })()}
             </div>
           </ScrollArea>
 
