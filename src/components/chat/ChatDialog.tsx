@@ -56,35 +56,28 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
     return true;
   }, []);
 
-  // Handle scroll events
-  const handleScroll = useCallback(() => {
-    checkIsAtBottom();
-    // Hide scroll button as soon as user starts scrolling down
-    setShowScrollButton(false);
-  }, [checkIsAtBottom]);
 
-  // Add scroll event listener to viewport
+
+  // Simple scroll tracking: open dialog = start tracking, close dialog = stop tracking
   useEffect(() => {
-    if (scrollRef.current && isOpen) {
-      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (viewport) {
-        const handleViewportScroll = () => {
-          checkIsAtBottom();
-          // Hide scroll button as soon as user starts scrolling down
-          setShowScrollButton(false);
-        };
+    if (!isOpen) return;
 
-        viewport.addEventListener('scroll', handleViewportScroll, { passive: true });
+    const handleScroll = () => {
+      checkIsAtBottom();
+      setShowScrollButton(false);
+    };
 
-        // Initial check
-        checkIsAtBottom();
+    // Add scroll listener to the entire document when dialog is open
+    document.addEventListener('scroll', handleScroll, { passive: true, capture: true });
 
-        return () => {
-          viewport.removeEventListener('scroll', handleViewportScroll);
-        };
-      }
-    }
-  }, [checkIsAtBottom, isOpen]);
+    // Initial check
+    checkIsAtBottom();
+
+    return () => {
+      // Remove scroll listener when dialog closes
+      document.removeEventListener('scroll', handleScroll, { capture: true });
+    };
+  }, [isOpen, checkIsAtBottom]);
 
   // Auto-scroll to bottom when messages change, but only if user is already at bottom
   useEffect(() => {
@@ -275,7 +268,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
 
         <div className="flex-1 flex flex-col min-h-0">
           {/* Messages area - Terminal style */}
-          <ScrollArea className="flex-1 px-4 py-2 font-mono text-xs relative" ref={scrollRef} onScroll={handleScroll}>
+          <ScrollArea className="flex-1 px-4 py-2 font-mono text-xs relative" ref={scrollRef}>
             <div className="space-y-1">
               {isMessagesLoading ? (
                 <div className="text-green-500 py-2 w-full">
