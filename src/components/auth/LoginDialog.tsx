@@ -2,20 +2,21 @@
 // It is important that all functionality in this file is preserved, and should only be modified if explicitly requested.
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Shield, Upload, AlertTriangle, UserPlus, KeyRound, Sparkles, Cloud } from 'lucide-react';
+import { nip19 } from 'nostr-tools';
+import { Shield, KeyRound, User as UserIcon, Edit2, X, Activity, Download, Copy, CheckCircle, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
 import { useLoginActions } from '@/hooks/useLoginActions';
-import { cn } from '@/lib/utils';
+import { useEphemeralIdentity } from '@/hooks/useEphemeralIdentity';
 
 interface LoginDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onLogin: () => void;
-  onSignup?: () => void;
+  _onSignup?: () => void;
 }
 
 const validateNsec = (nsec: string) => {
@@ -26,35 +27,96 @@ const validateBunkerUri = (uri: string) => {
   return uri.startsWith('bunker://');
 };
 
-const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onSignup }) => {
+const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _onSignup }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [isFileLoading, setIsFileLoading] = useState(false);
   const [nsec, setNsec] = useState('');
   const [bunkerUri, setBunkerUri] = useState('');
   const [errors, setErrors] = useState<{
     nsec?: string;
     bunker?: string;
-    file?: string;
     extension?: string;
   }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const login = useLoginActions();
+  const { identity, updateNickname, generateIdentity } = useEphemeralIdentity();
+  const [isEditingNickname, setIsEditingNickname] = useState(false);
+  const [newNickname, setNewNickname] = useState('');
+  const [ephemeralKeySecured, setEphemeralKeySecured] = useState<'none' | 'copied' | 'downloaded'>('none');
 
   // Reset all state when dialog opens/closes
   useEffect(() => {
     if (isOpen) {
       // Reset state when dialog opens
       setIsLoading(false);
-      setIsFileLoading(false);
       setNsec('');
       setBunkerUri('');
       setErrors({});
+      setIsEditingNickname(false);
+      setNewNickname('');
+      setEphemeralKeySecured('none');
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   }, [isOpen]);
+
+  // Handle nickname editing
+  const handleStartEditNickname = () => {
+    if (identity) {
+      setNewNickname(identity.nickname);
+      setIsEditingNickname(true);
+    }
+  };
+
+  const handleSaveNickname = () => {
+    if (newNickname.trim() && identity) {
+      updateNickname(newNickname.trim());
+      setIsEditingNickname(false);
+    }
+  };
+
+  const handleCancelEditNickname = () => {
+    setIsEditingNickname(false);
+    setNewNickname('');
+  };
+
+  // Ephemeral key management
+  const copyEphemeralKey = () => {
+    if (identity?.privateKey) {
+      const nsec = nip19.nsecEncode(identity.privateKey);
+      navigator.clipboard.writeText(nsec);
+      setEphemeralKeySecured('copied');
+    }
+  };
+
+  const downloadEphemeralKey = () => {
+    if (identity?.privateKey) {
+      try {
+        const nsec = nip19.nsecEncode(identity.privateKey);
+        const blob = new Blob([nsec], { type: 'text/plain; charset=utf-8' });
+        const url = globalThis.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ephemeral-key-${identity.nickname}.txt`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        globalThis.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setEphemeralKeySecured('downloaded');
+      } catch {
+        // Silently fail download
+      }
+    }
+  };
+
+  const handleGenerateEphemeral = () => {
+    const newIdentity = generateIdentity();
+    if (newIdentity) {
+      setEphemeralKeySecured('none');
+    }
+  };
 
   const handleExtensionLogin = async () => {
     setIsLoading(true);
@@ -141,236 +203,334 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    setIsFileLoading(true);
-    setErrors({});
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setIsFileLoading(false);
-      const content = event.target?.result as string;
-      if (content) {
-        const trimmedContent = content.trim();
-        if (validateNsec(trimmedContent)) {
-          executeLogin(trimmedContent);
-        } else {
-          setErrors({ file: 'File does not contain a valid secret key.' });
-        }
-      } else {
-        setErrors({ file: 'Could not read file content.' });
-      }
-    };
-    reader.onerror = () => {
-      setIsFileLoading(false);
-      setErrors({ file: 'Failed to read file.' });
-    };
-    reader.readAsText(file);
-  };
-
-  const handleSignupClick = () => {
-    onClose();
-    if (onSignup) {
-      onSignup();
-    }
-  };
-
-  const defaultTab = 'nostr' in window ? 'extension' : 'key';
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent
-        className={cn("max-w-[95vw] sm:max-w-md max-h-[90vh] max-h-[90dvh] p-0 overflow-hidden rounded-2xl overflow-y-scroll")}
-      >
-        <DialogHeader className={cn('px-6 pt-6 pb-1 relative')}>
-
-            <DialogDescription className="text-center">
-              Sign up or log in to continue
-            </DialogDescription>
-        </DialogHeader>
-        <div className='px-6 pt-2 pb-4 space-y-4 overflow-y-auto flex-1'>
-          {/* Prominent Sign Up Section */}
-          <div className='relative p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/50 dark:to-indigo-950/50 border border-blue-200 dark:border-blue-800 overflow-hidden'>
-            <div className='relative z-10 text-center space-y-3'>
-              <div className='flex justify-center items-center gap-2 mb-2'>
-                <Sparkles className='w-5 h-5 text-blue-600' />
-                <span className='font-semibold text-blue-800 dark:text-blue-200'>
-                  New to Nostr?
-                </span>
-              </div>
-              <p className='text-sm text-blue-700 dark:text-blue-300'>
-                Create a new account to get started. It's free and open.
-              </p>
+      <DialogContent className="max-w-md bg-black border border-green-500/30 flex flex-col">
+        <DialogHeader className="border-b border-green-500/20 pb-4">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2 text-green-400 font-mono text-md">
+              <Activity className="h-3 w-3" />
+              IDENTITY TERMINAL
+            </DialogTitle>
+            <DialogClose asChild>
               <Button
-                onClick={handleSignupClick}
-                className='w-full rounded-full py-3 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transform transition-all duration-200 hover:scale-105 shadow-lg border-0'
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-green-500 hover:text-green-400 hover:bg-green-500/20 rounded-sm"
               >
-                <UserPlus className='w-4 h-4 mr-2' />
-                <span>Sign Up</span>
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
               </Button>
-            </div>
+            </DialogClose>
           </div>
-
-          {/* Divider */}
-          <div className='relative'>
-            <div className='absolute inset-0 flex items-center'>
-              <div className='w-full border-t border-gray-300 dark:border-gray-600'></div>
-            </div>
-            <div className='relative flex justify-center text-sm'>
-              <span className='px-3 bg-background text-muted-foreground'>
-                <span>Or log in</span>
-              </span>
-            </div>
-          </div>
-
-          {/* Login Methods */}
-          <Tabs defaultValue={defaultTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 bg-muted/80 rounded-lg mb-4">
-              <TabsTrigger value="extension" className="flex items-center gap-2">
-                <Shield className="w-4 h-4" />
-                <span>Extension</span>
-              </TabsTrigger>
-              <TabsTrigger value="key" className="flex items-center gap-2">
-                <KeyRound className="w-4 h-4" />
-                <span>Key</span>
-              </TabsTrigger>
-              <TabsTrigger value="bunker" className="flex items-center gap-2">
-                <Cloud className="w-4 h-4" />
-                <span>Bunker</span>
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value='extension' className='space-y-3 bg-muted'>
-              {errors.extension && (
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>{errors.extension}</AlertDescription>
-                </Alert>
+          <div className="flex items-center gap-4 text-xs text-gray-400 font-mono">
+            <div className="flex items-center gap-1">
+              <UserIcon className="h-3 w-3 text-orange-400" />
+              {identity ? (
+                isEditingNickname ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={newNickname}
+                      onChange={(e) => setNewNickname(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') handleSaveNickname();
+                        if (e.key === 'Escape') handleCancelEditNickname();
+                      }}
+                      placeholder="New nickname..."
+                      className="h-6 text-xs bg-black/50 border-green-500/30 text-green-400 placeholder:text-green-500/50 font-mono w-32"
+                      autoFocus
+                    />
+                    <Button
+                      onClick={handleSaveNickname}
+                      size="sm"
+                      className="h-6 w-6 bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400 p-0"
+                    >
+                      ✓
+                    </Button>
+                    <Button
+                      onClick={handleCancelEditNickname}
+                      size="sm"
+                      className="h-6 w-6 bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-400 p-0"
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleStartEditNickname}
+                    className="text-orange-300 hover:text-orange-200 transition-colors flex items-center gap-1"
+                  >
+                    Ephemeral: {identity.nickname}
+                    <Edit2 className="h-3 w-3" />
+                  </button>
+                )
+              ) : (
+                <span className="text-gray-500">No ephemeral identity</span>
               )}
-              <div className='text-center p-4 rounded-lg bg-gray-50 dark:bg-gray-800'>
-                <Shield className='w-12 h-12 mx-auto mb-3 text-primary' />
-                <p className='text-sm text-gray-600 dark:text-gray-300 mb-4'>
-                  Login with one click using the browser extension
-                </p>
-                <div className="flex justify-center">
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="flex-1 flex flex-col min-h-0 p-4 space-y-4">
+          {/* Status indicator */}
+          <div className="text-green-500 py-2 w-full font-mono text-xs">
+            <span className="animate-pulse">[READY] </span>
+            <span>Identity management terminal active.</span>
+          </div>
+
+          {identity ? (
+            <>
+              {/* Ephemeral identity exists */}
+              <div className="space-y-4">
+                <div className="text-yellow-400 py-2 w-full font-mono text-xs leading-relaxed">
+                  <span>[WARNING] </span>
+                  <span>This ephemeral identity is temporary. Secure your key for future reuse.</span>
+                </div>
+
+                {/* Key management options */}
+                <div className="space-y-2">
+                  {/* Copy Option */}
+                  <Card className={`cursor-pointer transition-all duration-200 ${
+                    ephemeralKeySecured === 'copied'
+                       ? 'border-green-500/50 bg-green-500/10'
+                       : 'border-green-500/20 hover:bg-green-500/10'
+                   }`}>
+                    <CardContent className='p-3'>
+                      <Button
+                        variant="ghost"
+                        className='w-full h-auto p-0 justify-start hover:bg-transparent'
+                        onClick={copyEphemeralKey}
+                      >
+                        <div className='flex items-center gap-3 w-full'>
+                          <div className={`p-1.5 rounded-lg ${
+                            ephemeralKeySecured === 'copied'
+                               ? 'bg-green-500/20'
+                               : 'bg-green-500/10'
+                           }`}>
+                            {ephemeralKeySecured === 'copied' ? (
+                               <CheckCircle className='w-4 h-4 text-green-400' />
+                             ) : (
+                               <Copy className='w-4 h-4 text-green-400' />
+                             )}
+                          </div>
+                          <div className='flex-1 text-left'>
+                             <div className='font-medium text-sm text-green-300'>
+                               Copy Ephemeral Key
+                             </div>
+                             <div className='text-xs text-gray-400'>
+                               Save to password manager
+                            </div>
+                            <div className='text-[.7rem] text-gray-500 font-mono'>
+                              {nip19.nsecEncode(identity.privateKey).slice(0,16)}...
+                            </div>
+                          </div>
+                          {ephemeralKeySecured === 'copied' && (
+                             <div className='text-xs font-medium text-green-400'>
+                               ✓ COPIED
+                             </div>
+                           )}
+                        </div>
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Download Option */}
+                  <Card className={`cursor-pointer transition-all duration-200 ${
+                    ephemeralKeySecured === 'downloaded'
+                       ? 'border-green-500/50 bg-green-500/10'
+                       : 'border-green-500/20 hover:bg-green-500/10'
+                   }`}>
+                    <CardContent className='p-3'>
+                      <Button
+                        variant="ghost"
+                        className='w-full h-auto p-0 justify-start hover:bg-transparent'
+                        onClick={downloadEphemeralKey}
+                      >
+                        <div className='flex items-center gap-3 w-full'>
+                          <div className={`p-1.5 rounded-lg ${
+                            ephemeralKeySecured === 'downloaded'
+                               ? 'bg-green-500/20'
+                               : 'bg-green-500/10'
+                           }`}>
+                            {ephemeralKeySecured === 'downloaded' ? (
+                               <CheckCircle className='w-4 h-4 text-green-400' />
+                             ) : (
+                               <Download className='w-4 h-4 text-green-400' />
+                             )}
+                          </div>
+                          <div className='flex-1 text-left'>
+                             <div className='font-medium text-sm text-green-300'>
+                               Download Ephemeral Key
+                             </div>
+                             <div className='text-xs text-gray-400'>
+                               Save as text file for later reuse
+                             </div>
+                          </div>
+                          {ephemeralKeySecured === 'downloaded' && (
+                             <div className='text-xs font-medium text-green-400'>
+                               ✓ DOWNLOADED
+                             </div>
+                           )}
+                        </div>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Generate new identity */}
+                <div className="pt-4 border-t border-green-500/20">
+                  <div className="text-gray-500 py-2 w-full font-mono text-xs mb-3">
+                    <span>[INFO] </span>
+                    <span>Need a fresh identity? Generate new ephemeral key.</span>
+                  </div>
                   <Button
-                    className='w-full rounded-full py-4'
-                    onClick={handleExtensionLogin}
-                    disabled={isLoading}
+                    onClick={handleGenerateEphemeral}
+                    className="w-full border-orange-500/30 text-orange-400 hover:bg-orange-500/10 font-mono text-xs py-3"
                   >
-                    {isLoading ? 'Logging in...' : 'Login with Extension'}
+                    <UserIcon className="w-3 h-3 mr-2" />
+                    [GENERATE NEW IDENTITY]
                   </Button>
                 </div>
               </div>
-            </TabsContent>
-
-            <TabsContent value='key' className='space-y-4'>
-              <div className='space-y-4'>
-                <div className='space-y-2'>
-                  <label htmlFor='nsec' className='text-sm font-medium'>
-                    Secret Key (nsec)
-                  </label>
-                  <Input
-                    id='nsec'
-                    type="password"
-                    value={nsec}
-                    onChange={(e) => {
-                      setNsec(e.target.value);
-                      if (errors.nsec) setErrors(prev => ({ ...prev, nsec: undefined }));
-                    }}
-                    className={`rounded-lg ${
-                      errors.nsec ? 'border-red-500 focus-visible:ring-red-500' : ''
-                    }`}
-                    placeholder='nsec1...'
-                    autoComplete="off"
-                  />
-                  {errors.nsec && (
-                    <p className="text-sm text-red-500">{errors.nsec}</p>
-                  )}
+            </>
+          ) : (
+            <>
+              {/* No ephemeral identity */}
+              <div className="space-y-4">
+                <div className="text-green-500 py-2 w-full font-mono text-xs">
+                  <span>[INFO] </span>
+                  <span>No ephemeral identity detected. Generate one to get started.</span>
                 </div>
 
                 <Button
-                  className='w-full rounded-full py-3'
-                  onClick={handleKeyLogin}
-                  disabled={isLoading || !nsec.trim()}
+                  onClick={handleGenerateEphemeral}
+                  className="w-full bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400 font-mono text-xs py-3"
                 >
-                  {isLoading ? 'Verifying...' : 'Log In'}
+                  <UserIcon className="w-3 h-3 mr-2" />
+                  [GENERATE EPHEMERAL IDENTITY]
                 </Button>
 
-                <div className='relative'>
-                  <div className='absolute inset-0 flex items-center'>
-                    <div className='w-full border-t border-muted'></div>
-                  </div>
-                  <div className='relative flex justify-center text-xs'>
-                    <span className='px-2 bg-background text-muted-foreground'>
-                      or
-                    </span>
-                  </div>
-                </div>
-
-                <div className='text-center'>
-                  <input
-                    type='file'
-                    accept='.txt'
-                    className='hidden'
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                  />
-                  <Button
-                    variant='outline'
-                    className='w-full'
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isLoading || isFileLoading}
-                  >
-                    <Upload className='w-4 h-4 mr-2' />
-                    {isFileLoading ? 'Reading File...' : 'Upload Your Key File'}
-                  </Button>
-                  {errors.file && (
-                    <p className="text-sm text-red-500 mt-2">{errors.file}</p>
-                  )}
+                <div className="text-gray-500 py-2 w-full font-mono text-xs leading-relaxed">
+                  <span>[INFO] </span>
+                  <span>Ephemeral identities are temporary and session-based.</span><br/>
+                  <span>[INFO] </span>
+                  <span>Secure your key if you want to reuse it later.</span>
                 </div>
               </div>
-            </TabsContent>
 
-            <TabsContent value='bunker' className='space-y-3 bg-muted'>
-              <div className='space-y-2'>
-                <label htmlFor='bunkerUri' className='text-sm font-medium text-gray-700 dark:text-gray-400'>
-                  Bunker URI
-                </label>
-                <Input
-                  id='bunkerUri'
-                  value={bunkerUri}
-                  onChange={(e) => {
-                    setBunkerUri(e.target.value);
-                    if (errors.bunker) setErrors(prev => ({ ...prev, bunker: undefined }));
-                  }}
-                  className={`rounded-lg border-gray-300 dark:border-gray-700 focus-visible:ring-primary ${
-                    errors.bunker ? 'border-red-500' : ''
-                  }`}
-                  placeholder='bunker://'
-                  autoComplete="off"
-                />
-                {errors.bunker && (
-                  <p className="text-sm text-red-500">{errors.bunker}</p>
-                )}
-              </div>
+              {/* Traditional login options */}
+              <div className="pt-4 border-t border-green-500/20">
+                <div className="text-gray-500 py-2 w-full font-mono text-xs mb-3">
+                  <span>[INFO] </span>
+                  <span>Or authenticate with existing Nostr identity.</span>
+                </div>
 
-              <div className="flex justify-center">
-                <Button
-                  className='w-full rounded-full py-4'
-                  onClick={handleBunkerLogin}
-                  disabled={isLoading || !bunkerUri.trim()}
-                >
-                  {isLoading ? 'Connecting...' : 'Login with Bunker'}
-                </Button>
+                <Tabs defaultValue={'nostr' in window ? 'extension' : 'key'} className="w-full">
+                  <TabsList className="grid w-full grid-cols-3 bg-black/50 border border-green-500/30 rounded-lg mb-4 p-1">
+                    <TabsTrigger value="extension" className="flex items-center gap-2 text-xs bg-transparent data-[state=active]:bg-green-500/20 data-[state=active]:text-green-400">
+                      <Shield className="w-3 h-3" />
+                      <span>EXT</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="key" className="flex items-center gap-2 text-xs bg-transparent data-[state=active]:bg-green-500/20 data-[state=active]:text-green-400">
+                      <KeyRound className="w-3 h-3" />
+                      <span>KEY</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="bunker" className="flex items-center gap-2 text-xs bg-transparent data-[state=active]:bg-green-500/20 data-[state=active]:text-green-400">
+                      <Cloud className="w-3 h-3" />
+                      <span>BUNK</span>
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value='extension' className='space-y-3'>
+                    {errors.extension && (
+                      <div className="text-red-500 py-2 w-full font-mono text-xs">
+                        <span>[ERROR] </span>
+                        <span>{errors.extension}</span>
+                      </div>
+                    )}
+                    <Button
+                      className="w-full bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400 font-mono text-xs py-3"
+                      onClick={handleExtensionLogin}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? '[AUTHENTICATING...]' : '[EXTENSION LOGIN]'}
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value='key' className='space-y-3'>
+                    <div className='space-y-2'>
+                      <Input
+                        id='nsec'
+                        type="password"
+                        value={nsec}
+                        onChange={(e) => {
+                          setNsec(e.target.value);
+                          if (errors.nsec) setErrors(prev => ({ ...prev, nsec: undefined }));
+                        }}
+                        className={`bg-black/50 border-green-500/30 text-green-400 placeholder:text-green-500/50 font-mono text-xs ${
+                          errors.nsec ? 'border-red-500' : ''
+                        }`}
+                        placeholder='nsec1...'
+                        autoComplete="off"
+                      />
+                      {errors.nsec && (
+                        <div className="text-red-500 py-1 w-full font-mono text-xs">
+                          <span>[ERROR] </span>
+                          <span>{errors.nsec}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      className="w-full bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400 font-mono text-xs py-3"
+                      onClick={handleKeyLogin}
+                      disabled={isLoading || !nsec.trim()}
+                    >
+                      {isLoading ? '[VERIFYING...]' : '[AUTHENTICATE]'}
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value='bunker' className='space-y-3'>
+                    <div className='space-y-2'>
+                      <Input
+                        id='bunkerUri'
+                        value={bunkerUri}
+                        onChange={(e) => {
+                          setBunkerUri(e.target.value);
+                          if (errors.bunker) setErrors(prev => ({ ...prev, bunker: undefined }));
+                        }}
+                        className={`bg-black/50 border-green-500/30 text-green-400 placeholder:text-green-500/50 font-mono text-xs ${
+                          errors.bunker ? 'border-red-500' : ''
+                        }`}
+                        placeholder='bunker://'
+                        autoComplete="off"
+                      />
+                      {errors.bunker && (
+                        <div className="text-red-500 py-1 w-full font-mono text-xs">
+                          <span>[ERROR] </span>
+                          <span>{errors.bunker}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      className="w-full bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400 font-mono text-xs py-3"
+                      onClick={handleBunkerLogin}
+                      disabled={isLoading || !bunkerUri.trim()}
+                    >
+                      {isLoading ? '[CONNECTING...]' : '[BUNKER LOGIN]'}
+                    </Button>
+                  </TabsContent>
+                </Tabs>
               </div>
-            </TabsContent>
-          </Tabs>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
-    );
+  );
   };
 
 export default LoginDialog;

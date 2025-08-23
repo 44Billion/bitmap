@@ -9,6 +9,7 @@ import { cn, truncateNickname } from '@/lib/utils';
 import { ChatDialog } from '@/components/chat/ChatDialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/useToast';
+import LoginDialog from '@/components/auth/LoginDialog';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -204,6 +205,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   }>({ isOpen: false, geohash: '', initialEvents: [] });
   const [isTeleportOpen, setIsTeleportOpen] = useState(false);
   const [teleportGeohash, setTeleportGeohash] = useState('');
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
   const mapRef = React.useRef<L.Map | null>(null);
 
   // Process events into heat map points
@@ -419,17 +421,29 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
           <span>LIVE - {events?.length || 0} EVENTS</span>
         </div>
       </div>
-      {/* Teleport button */}
-      <Button
-        onClick={handleOpenTeleport}
-        size="sm"
-        className="absolute top-14 sm:top-16 right-4 bg-black/80 border border-cyan-500/30 rounded-lg py-0 px-2 font-mono text-xs z-10"
-      >
-          <div className="flex items-center gap-2 text-cyan-400">
-            <Navigation className="h-3 w-3 animate-pulse transform -mt-[.1rem] scale-75" />
-            <span>TELEPORT</span>
-          </div>
-      </Button>
+      {/* Button container */}
+      <div className="absolute top-14 sm:top-16 right-4 flex gap-2 z-10">
+        {/* Teleport button */}
+        <Button
+          onClick={handleOpenTeleport}
+          size="sm"
+          className="bg-black/80 border border-cyan-500/30 rounded-lg py-0 px-2 font-mono text-xs"
+        >
+            <div className="flex items-center gap-2 text-cyan-400">
+              <Navigation className="h-3 w-3 animate-pulse transform -mt-[.1rem] scale-75" />
+              <span>TELEPORT</span>
+            </div>
+        </Button>
+
+        {/* Login button */}
+        <Button
+          onClick={() => setIsLoginDialogOpen(true)}
+          size="sm"
+          className="bg-black/80 border border-orange-400/50 rounded-lg py-0 px-2 font-mono text-xs"
+        >
+            <User className="h-3 w-3 text-orange-400" />
+        </Button>
+      </div>
 
       {/* Chat Dialog */}
       <ChatDialog
@@ -485,6 +499,13 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Login Dialog */}
+      <LoginDialog
+        isOpen={isLoginDialogOpen}
+        onClose={() => setIsLoginDialogOpen(false)}
+        onLogin={() => setIsLoginDialogOpen(false)}
+      />
     </div>
   );
 }
