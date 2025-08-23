@@ -356,7 +356,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                 onClick={handleSendMessage}
                 disabled={!message.trim() || !session || isLoading}
                 size="sm"
-                className="bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400"
+                className="h-10 bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400"
               >
                 <Send className="h-4 w-4" />
               </Button>
