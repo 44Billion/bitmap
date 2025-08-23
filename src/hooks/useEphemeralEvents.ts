@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNostr } from '@nostrify/react';
 import type { NostrEvent } from '@nostrify/nostrify';
+import { truncateNickname } from '@/lib/utils';
 
 export interface EphemeralEventData {
   event: NostrEvent;
@@ -22,7 +23,8 @@ function validateEphemeralEvent(event: NostrEvent): boolean {
 
 function transformEphemeralEvent(event: NostrEvent): EphemeralEventData {
   const geohash = event.tags.find(([name]) => name === 'g')?.[1];
-  const nickname = event.tags.find(([name]) => name === 'n')?.[1];
+  const rawNickname = event.tags.find(([name]) => name === 'n')?.[1];
+  const nickname = truncateNickname(rawNickname);
 
   return {
     event,

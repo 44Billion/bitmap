@@ -9,7 +9,7 @@ import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2, X, Swords, Flo
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/hooks/useToast';
-import { isLikelySpam } from '@/lib/utils';
+import { isLikelySpam, truncateNickname } from '@/lib/utils';
 
 import type { EphemeralEventMessage } from '@/hooks/useChatSession';
 
@@ -247,12 +247,12 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                         <div key={msg.event.id} className="leading-relaxed w-full">
                           <span className="text-gray-500">[{timestamp}] </span>
                           {isOwn ? (
-                            <span className="text-cyan-400">
-                              &lt;{session?.nickname || 'user'}&gt;
+                            <span className="text-cyan-400" title={session?.nickname || 'user'}>
+                              &lt;{truncateNickname(session?.nickname || 'user')}&gt;
                             </span>
                           ) : (
-                            <span className="text-green-400">
-                              &lt;{authorNickname}&gt;
+                            <span className="text-green-400" title={authorNickname}>
+                              &lt;{truncateNickname(authorNickname)}&gt;
                             </span>
                           )}
                           <span className="text-gray-300 whitespace-pre-wrap break-all overflow-wrap-anywhere">{msg.message}</span>
@@ -272,7 +272,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={session ? (user ? "Type your message..." : `Chatting as ${session.nickname}...`) : "Connecting..."}
+                placeholder={session ? (user ? "Type your message..." : `Chatting as ${truncateNickname(session.nickname)}...`) : "Connecting..."}
                 disabled={!session || isLoading}
                 className="bg-black/50 border-green-500/30 text-green-400 placeholder:text-green-500/50 font-mono text-sm"
               />

@@ -5,7 +5,7 @@ import type { LatLngExpression } from 'leaflet';
 import L from 'leaflet';
 import { useEphemeralEvents, type EphemeralEventData } from '@/hooks/useEphemeralEvents';
 import { AlertTriangle, Activity, MapPin, User, Plus, Minus, MessageSquare, Navigation } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, truncateNickname } from '@/lib/utils';
 import { ChatDialog } from '@/components/chat/ChatDialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/useToast';
@@ -151,7 +151,9 @@ const EventPopup = React.memo(({ point, onOpenChat }: {
         {latestEvent.nickname && (
           <div className="flex items-center gap-2">
             <User className="h-3 w-3 text-blue-400" />
-            <span className="text-blue-300">{latestEvent.nickname}</span>
+            <span className="text-blue-300" title={latestEvent.nickname}>
+              {truncateNickname(latestEvent.nickname)}
+            </span>
           </div>
         )}
 

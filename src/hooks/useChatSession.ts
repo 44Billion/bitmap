@@ -4,7 +4,7 @@ import { useNostr } from '@nostrify/react';
 import { useCurrentUser } from './useCurrentUser';
 import { useEphemeralIdentity } from './useEphemeralIdentity';
 import { finalizeEvent } from 'nostr-tools';
-import { isCompleteRelayFailure } from '@/lib/utils';
+import { isCompleteRelayFailure, truncateNickname } from '@/lib/utils';
 import type { NostrEvent } from '@nostrify/nostrify';
 
 export interface EphemeralEventMessage {
@@ -79,12 +79,15 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
 
         // Transform events and sort by timestamp (newest last for chat display)
         const transformedMessages = events
-          .map(event => ({
-            event,
-            geohash: event.tags.find(([name]) => name === 'g')?.[1],
-            nickname: event.tags.find(([name]) => name === 'n')?.[1],
-            message: event.content,
-          }))
+          .map(event => {
+            const rawNickname = event.tags.find(([name]) => name === 'n')?.[1];
+            return {
+              event,
+              geohash: event.tags.find(([name]) => name === 'g')?.[1],
+              nickname: truncateNickname(rawNickname),
+              message: event.content,
+            };
+          })
           .sort((a, b) => a.event.created_at - b.event.created_at);
 
         // Update the chat messages cache
@@ -122,12 +125,15 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
 
         if (newEvents.length > 0) {
           const newMessages = newEvents
-            .map(event => ({
-              event,
-              geohash: event.tags.find(([name]) => name === 'g')?.[1],
-              nickname: event.tags.find(([name]) => name === 'n')?.[1],
-              message: event.content,
-            }))
+            .map(event => {
+              const rawNickname = event.tags.find(([name]) => name === 'n')?.[1];
+              return {
+                event,
+                geohash: event.tags.find(([name]) => name === 'g')?.[1],
+                nickname: truncateNickname(rawNickname),
+                message: event.content,
+              };
+            })
             .sort((a, b) => a.event.created_at - b.event.created_at);
 
           // Append new messages to existing ones
