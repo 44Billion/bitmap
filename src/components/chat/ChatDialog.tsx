@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2 } from 'lucide-react';
+import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2, X } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/hooks/useToast';
@@ -106,13 +106,25 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl h-[600px] bg-black border border-green-500/30 flex flex-col pb-0 overflow-hidden">
         <DialogHeader className="border-b border-green-500/20 pb-4">
-          <DialogTitle className="flex items-center gap-2 text-green-400 font-mono">
-            <Activity className="h-5 w-5" />
-            BITCHAT SESSION
-            <Badge variant="outline" className="text-[10px] border-cyan-500/50 text-cyan-400">
-              {geohash}
-            </Badge>
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2 text-green-400 font-mono">
+              <Activity className="h-5 w-5" />
+              BITCHAT SESSION
+              <Badge variant="outline" className="text-[10px] border-cyan-500/50 text-cyan-400">
+                {geohash}
+              </Badge>
+            </DialogTitle>
+            <DialogClose asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-green-500 hover:text-green-400 hover:bg-green-500/20 rounded-sm"
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </DialogClose>
+          </div>
           <div className="flex items-center gap-4 text-xs text-gray-400 font-mono">
             <div className="flex items-center gap-1">
               <MapPin className="h-3 w-3" />
