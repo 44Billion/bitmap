@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2, X, Swords, Flower } from 'lucide-react';
+import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2, X, Swords, Flower, ChevronDown } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/hooks/useToast';
@@ -25,6 +25,8 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   const [newNickname, setNewNickname] = useState('');
   const [hideSpam, setHideSpam] = useState(true); // Default to hiding spam
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const { session, sendMessage: sendChatMessage, isLoading, updateNickname } = useChatSession(geohash);
   const { user, metadata } = useCurrentUser();
   const { toast } = useToast();
@@ -39,19 +41,81 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
     enabled: !!geohash && isOpen,
   });
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
+  // Check if user is at bottom of scroll
+  const checkIsAtBottom = useCallback(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        const { scrollTop, scrollHeight, clientHeight } = viewport as HTMLElement;
+        const threshold = 50; // pixels from bottom
+        const isBottom = scrollHeight - scrollTop - clientHeight <= threshold;
+        setIsAtBottom(isBottom);
+        return isBottom;
+      }
     }
-  }, [chatMessages]);
+    return true;
+  }, []);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Handle scroll events
+  const handleScroll = useCallback(() => {
+    checkIsAtBottom();
+  }, [checkIsAtBottom]);
+
+  // Add scroll event listener to viewport
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollRef.current && isOpen) {
+      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        const handleViewportScroll = () => {
+          checkIsAtBottom();
+        };
+
+        viewport.addEventListener('scroll', handleViewportScroll, { passive: true });
+
+        // Initial check
+        checkIsAtBottom();
+
+        return () => {
+          viewport.removeEventListener('scroll', handleViewportScroll);
+        };
+      }
     }
-  }, [chatMessages]);
+  }, [checkIsAtBottom, isOpen]);
+
+  // Auto-scroll to bottom when messages change, but only if user is already at bottom
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      const wasAtBottom = checkIsAtBottom();
+      if (wasAtBottom && scrollRef.current) {
+        const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+        if (viewport) {
+          (viewport as HTMLElement).scrollTop = (viewport as HTMLElement).scrollHeight;
+        }
+      } else if (!wasAtBottom) {
+        // Show scroll button if new messages arrive and user is not at bottom
+        setShowScrollButton(true);
+      }
+    }
+  }, [chatMessages, checkIsAtBottom]);
+
+  // Hide scroll button when user manually scrolls to bottom
+  useEffect(() => {
+    if (isAtBottom) {
+      setShowScrollButton(false);
+    }
+  }, [isAtBottom]);
+
+  // Scroll to bottom function
+  const scrollToBottom = useCallback(() => {
+    if (scrollRef.current) {
+      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        (viewport as HTMLElement).scrollTop = (viewport as HTMLElement).scrollHeight;
+        setShowScrollButton(false);
+        setIsAtBottom(true);
+      }
+    }
+  }, []);
 
   // Handle nickname editing
   const handleStartEditNickname = () => {
@@ -207,7 +271,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
 
         <div className="flex-1 flex flex-col min-h-0">
           {/* Messages area - Terminal style */}
-          <ScrollArea className="flex-1 px-4 py-2 font-mono text-xs" ref={scrollRef}>
+          <ScrollArea className="flex-1 px-4 py-2 font-mono text-xs relative" ref={scrollRef} onScroll={handleScroll}>
             <div className="space-y-1">
               {isMessagesLoading ? (
                 <div className="text-green-500 py-2 w-full">
@@ -263,6 +327,18 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                 );
               })()}
             </div>
+
+            {/* Scroll to bottom button */}
+            {showScrollButton && (
+              <Button
+                onClick={scrollToBottom}
+                size="sm"
+                className="absolute bottom-4 right-4 h-8 w-8 p-0 bg-green-500/90 hover:bg-green-500 border-green-500/50 text-green-900 shadow-lg rounded-sm transition-all duration-200 hover:scale-110 z-10"
+                title="Scroll to bottom"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            )}
           </ScrollArea>
 
           {/* Input area */}

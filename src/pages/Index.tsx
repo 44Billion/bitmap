@@ -10,15 +10,33 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-black">
       <EphemeralHeatMap className="h-screen" />
-      {/* Vibed with MKStack branding */}
-      <div className="fixed bottom-4 right-4 z-50">
+      {/* Footer */}
+      <div className="absolute bottom-4 right-4 text-xs font-mono text-gray-500 z-10">
         <a
-          href="https://soapbox.pub/mkstack"
+          href="https://nostrhub.io/naddr1qvzqqqrhnypzppscgyy746fhmrt0nq955z6xmf80pkvrat0yq0hpknqtd00z8z68qyt8wumn8ghj7un9d3shjtnswf5k6ctv9ehx2aqqqe3xjardv9cq5q8qjf"
+          className="text-cyan-400 hover:text-cyan-300 transition-colors"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-green-500/60 hover:text-green-400 text-xs font-mono transition-colors"
         >
-          Vibed with MKStack
+          Bitmap
+        </a>
+        {' '} | Vibed with{' '}
+        <a
+          href="https://soapbox.pub/mkstack"
+          className="text-cyan-400 hover:text-cyan-300 transition-colors"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          MKStack
+        </a>
+        {' '} & {' '}
+        <a
+          href="https://shakespeare.diy"
+          className="text-cyan-400 hover:text-cyan-300 transition-colors"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Shakespeare
         </a>
       </div>
     </div>
