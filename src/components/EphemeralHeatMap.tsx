@@ -423,10 +423,10 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       <Button
         onClick={handleOpenTeleport}
         size="sm"
-        className="absolute top-16 right-4 bg-black/80 border border-cyan-500/30 rounded-lg p-2 font-mono text-xs z-10"
+        className="absolute top-14 sm:top-16 right-4 bg-black/80 border border-cyan-500/30 rounded-lg py-0 px-2 font-mono text-xs z-10"
       >
           <div className="flex items-center gap-2 text-cyan-400">
-            <Navigation className="h-2 w-2 animate-pulse" />
+            <Navigation className="h-3 w-3 animate-pulse transform -mt-[.1rem] scale-75" />
             <span>TELEPORT</span>
           </div>
       </Button>

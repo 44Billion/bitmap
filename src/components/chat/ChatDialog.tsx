@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
+
 import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2, X, Swords, Flower, ChevronDown } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
