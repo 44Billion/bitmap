@@ -110,20 +110,21 @@ function CustomContextMenu({
             : 'w-80 rounded-lg'
           }
           bg-black border border-green-500/30 shadow-2xl font-mono
+          no-select select-none touch-none
         `}
         style={menuStyle}
       >
         {/* Header */}
-        <div className="border-b border-green-500/20 p-2">
+        <div className="border-b border-green-500/20 p-2 no-select select-none">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-cyan-400 font-mono">
+            <div className="flex items-center gap-2 text-cyan-400 font-mono no-select select-none">
               <MapPin className="h-4 w-4" />
               <span className="text-sm">TELEPORT TO A GEOHASH</span>
             </div>
             {isMobile && (
               <button
                 onClick={onClose}
-                className="text-green-400 hover:text-green-300 transition-colors"
+                className="text-green-400 hover:text-green-300 transition-colors no-select select-none"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -147,6 +148,7 @@ function CustomContextMenu({
                   hover:bg-green-500/10 active:bg-green-500/20
                   transition-colors border-b border-green-500/10 last:border-b-0
                   focus:outline-none focus:ring-2 focus:ring-green-500/50
+                  no-select select-none touch-none
                 `}
               >
                 {/* Precision level header */}

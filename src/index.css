@@ -167,3 +167,13 @@
 .overflow-wrap-anywhere {
   overflow-wrap: anywhere !important;
 }
+
+/* Prevent text selection on mobile context menus to avoid iOS long-press highlighting */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
