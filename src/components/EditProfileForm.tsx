@@ -68,6 +68,7 @@ export const EditProfileForm: React.FC = () => {
       toast({
         title: 'Success',
         description: `${field === 'picture' ? 'Profile picture' : 'Banner'} uploaded successfully`,
+        variant: 'success',
       });
     } catch (error) {
       console.error(`Failed to upload ${field}:`, error);
@@ -113,6 +114,7 @@ export const EditProfileForm: React.FC = () => {
       toast({
         title: 'Success',
         description: 'Your profile has been updated',
+        variant: 'success',
       });
     } catch (error) {
       console.error('Failed to update profile:', error);
@@ -151,10 +153,10 @@ export const EditProfileForm: React.FC = () => {
             <FormItem>
               <FormLabel>Bio</FormLabel>
               <FormControl>
-                <Textarea 
-                  placeholder="Tell others about yourself" 
-                  className="resize-none" 
-                  {...field} 
+                <Textarea
+                  placeholder="Tell others about yourself"
+                  className="resize-none"
+                  {...field}
                 />
               </FormControl>
               <FormDescription>
@@ -254,9 +256,9 @@ export const EditProfileForm: React.FC = () => {
           )}
         />
 
-        <Button 
-          type="submit" 
-          className="w-full md:w-auto" 
+        <Button
+          type="submit"
+          className="w-full md:w-auto"
           disabled={isPending || isUploading}
         >
           {(isPending || isUploading) && (
@@ -308,8 +310,8 @@ const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
           />
         </FormControl>
         <div className="flex items-center gap-2">
-          <input 
-            type="file" 
+          <input
+            type="file"
             ref={fileInputRef}
             accept="image/*"
             className="hidden"
@@ -331,9 +333,9 @@ const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
           </Button>
           {field.value && (
             <div className={`h-10 ${previewType === 'square' ? 'w-10' : 'w-24'} rounded overflow-hidden`}>
-              <img 
-                src={field.value} 
-                alt={`${label} preview`} 
+              <img
+                src={field.value}
+                alt={`${label} preview`}
                 className="h-full w-full object-cover"
               />
             </div>

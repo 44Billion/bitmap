@@ -354,8 +354,8 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     const label = precisionLabels[precision] || `Level ${precision}`;
 
     toast({
-      title: "📡 GEOHASH SELECTED",
-      description: `${label} (Level ${precision}): ${geohash}`,
+      title: "GEOHASH SELECTED",
+      description: `${label} (GEOHASH: ${geohash})`,
       duration: 4000,
     });
 

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { encode } from 'ngeohash';
 import { useMap } from 'react-leaflet';
 import { createPortal } from 'react-dom';
-import { Activity, MapPin, X } from 'lucide-react';
+import { MapPin, X } from 'lucide-react';
 
 interface GeohashOption {
   precision: number;
@@ -28,15 +28,15 @@ interface MapGeohashContextMenuProps {
 }
 
 // Mobile-friendly context menu component
-function CustomContextMenu({ 
-  x, y, 
+function CustomContextMenu({
+  x, y,
   location,
-  onSelect, 
+  onSelect,
   onClose,
   isMobile
-}: { 
-  x: number; 
-  y: number; 
+}: {
+  x: number;
+  y: number;
   location: MapClickLocation;
   onSelect: (precision: number) => void;
   onClose: () => void;
@@ -100,13 +100,13 @@ function CustomContextMenu({
           onClick={onClose}
         />
       )}
-      
+
       {/* Menu container */}
       <div
         ref={menuRef}
         className={`
-          ${isMobile 
-            ? 'w-[90vw] max-w-sm mx-auto rounded-xl' 
+          ${isMobile
+            ? 'w-[90vw] max-w-sm mx-auto rounded-xl'
             : 'w-80 rounded-lg'
           }
           bg-black border border-green-500/30 shadow-2xl font-mono
@@ -130,7 +130,7 @@ function CustomContextMenu({
             )}
           </div>
         </div>
-        
+
         {/* Menu items */}
         <div>
           {GEOHASH_OPTIONS.map((option) => {
@@ -181,10 +181,10 @@ export function MapGeohashContextMenuHandler({ onGeohashSelect }: MapGeohashCont
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768 || 'ontouchstart' in window);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
+
     return () => {
       window.removeEventListener('resize', checkMobile);
     };
@@ -193,13 +193,13 @@ export function MapGeohashContextMenuHandler({ onGeohashSelect }: MapGeohashCont
   // Handle context menu (right-click on desktop, long-press on mobile)
   const handleContextMenu = useCallback((e: MouseEvent | TouchEvent) => {
     e.preventDefault();
-    
+
     // Get the map container
     const mapContainer = map.getContainer();
     const rect = mapContainer.getBoundingClientRect();
-    
+
     let clientX, clientY;
-    
+
     if (e instanceof MouseEvent) {
       clientX = e.clientX;
       clientY = e.clientY;
@@ -209,15 +209,15 @@ export function MapGeohashContextMenuHandler({ onGeohashSelect }: MapGeohashCont
     } else {
       return;
     }
-    
+
     // Calculate relative position
     const containerX = clientX - rect.left;
     const containerY = clientY - rect.top;
-    
+
     // Convert container coordinates to lat/lng
     const latlng = map.containerPointToLatLng([containerX, containerY]);
     const location: MapClickLocation = { lat: latlng.lat, lng: latlng.lng };
-    
+
     // Store the click location and menu position
     setClickLocation(location);
     setMenuPosition({ x: clientX, y: clientY });
@@ -226,34 +226,34 @@ export function MapGeohashContextMenuHandler({ onGeohashSelect }: MapGeohashCont
   // Handle long-press for mobile
   useEffect(() => {
     if (!isMobile) return;
-    
+
     const mapContainer = map.getContainer();
     let pressTimer: NodeJS.Timeout | null = null;
-    
+
     const handleTouchStart = (e: TouchEvent) => {
       pressTimer = setTimeout(() => {
         handleContextMenu(e);
       }, 500); // 500ms long press
     };
-    
+
     const handleTouchEnd = () => {
       if (pressTimer) {
         clearTimeout(pressTimer);
         pressTimer = null;
       }
     };
-    
+
     const handleTouchMove = () => {
       if (pressTimer) {
         clearTimeout(pressTimer);
         pressTimer = null;
       }
     };
-    
+
     mapContainer.addEventListener('touchstart', handleTouchStart as EventListener);
     mapContainer.addEventListener('touchend', handleTouchEnd as EventListener);
     mapContainer.addEventListener('touchmove', handleTouchMove as EventListener);
-    
+
     return () => {
       mapContainer.removeEventListener('touchstart', handleTouchStart as EventListener);
       mapContainer.removeEventListener('touchend', handleTouchEnd as EventListener);
@@ -263,10 +263,10 @@ export function MapGeohashContextMenuHandler({ onGeohashSelect }: MapGeohashCont
 
   const handleGeohashSelect = useCallback((precision: number) => {
     if (!clickLocation) return;
-    
+
     const geohash = encode(clickLocation.lat, clickLocation.lng, precision);
     onGeohashSelect(geohash, precision);
-    
+
     // Clean up
     setClickLocation(null);
     setMenuPosition(null);
