@@ -197,7 +197,8 @@ const EventPopup = React.memo(({ point, onOpenChat }: {
 });
 
 export function EphemeralHeatMap({ className }: { className?: string }) {
-  const { data: events, isLoading, error } = useEphemeralEvents();
+  const [selectedGeohash, setSelectedGeohash] = useState<string | null>(null);
+  const { data: events, isLoading, error } = useEphemeralEvents(selectedGeohash || undefined);
   const [mapCenter, setMapCenter] = useState<LatLngExpression>([40.7128, -74.0060]); // Default to NYC
   const [highlightedGeohash, setHighlightedGeohash] = useState<string | null>(null);
   const { spamFilterEnabled, toggleSpamFilter } = useSpamFilter();
@@ -325,6 +326,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
 
   // Chat dialog handlers
   const handleOpenChat = (geohash: string, events: EphemeralEventData[]) => {
+    setSelectedGeohash(geohash);
     setChatDialog({
       isOpen: true,
       geohash,
@@ -334,6 +336,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
 
   const handleCloseChat = () => {
     setChatDialog(prev => ({ ...prev, isOpen: false }));
+    setSelectedGeohash(null);
   };
 
   // Teleport dialog handlers
@@ -346,6 +349,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     if (teleportGeohash.trim()) {
       // Validate geohash format (alphanumeric, any length)
       if (/^[a-zA-Z0-9]+$/.test(teleportGeohash.trim())) {
+        setSelectedGeohash(teleportGeohash.trim());
         // Open chat dialog for teleport geohash
         setChatDialog({
           isOpen: true,
@@ -382,6 +386,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       duration: 4000,
     });
 
+    setSelectedGeohash(geohash);
     // Open chat dialog with the selected geohash
     setChatDialog({
       isOpen: true,
