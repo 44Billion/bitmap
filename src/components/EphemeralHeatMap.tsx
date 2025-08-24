@@ -15,6 +15,7 @@ import LoginDialog from '@/components/auth/LoginDialog';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { MapGeohashContextMenu, MapGeohashContextMenuHandler } from '@/components/MapGeohashContextMenu';
 
 interface HeatMapPoint {
   lat: number;
@@ -346,6 +347,26 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     setTeleportGeohash('');
   };
 
+  // Handle geohash selection from context menu
+  const handleGeohashSelect = (geohash: string, precision: number) => {
+    // Show themed toast with selected geohash info
+    const precisionLabels = ['', 'Continent', 'Large Region', 'State/Province', 'City', 'District'];
+    const label = precisionLabels[precision] || `Level ${precision}`;
+
+    toast({
+      title: "📡 GEOHASH SELECTED",
+      description: `${label} (Level ${precision}): ${geohash}`,
+      duration: 4000,
+    });
+
+    // Open chat dialog with the selected geohash
+    setChatDialog({
+      isOpen: true,
+      geohash,
+      initialEvents: [],
+    });
+  };
+
   if (isLoading) {
     return (
       <div className={cn("bg-black flex items-center justify-center", className)}>
@@ -373,7 +394,8 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       {/* Scanning line animation overlay */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse z-10" />
 
-      <MapContainer
+      <MapGeohashContextMenu>
+        <MapContainer
         center={mapCenter}
         zoom={3}
         style={{ height: '100%', width: '100%', minHeight: '100vh' }}
@@ -388,6 +410,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         ref={mapRef}
       >
         <MapBoundaryEnforcer />
+        <MapGeohashContextMenuHandler onGeohashSelect={handleGeohashSelect} />
 
         {/* Dark tile layer - using CartoDB Dark Matter */}
         <TileLayer
@@ -440,6 +463,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
 
 
       </MapContainer>
+      </MapGeohashContextMenu>
 
       {/* Custom zoom controls */}
       <CustomZoomControls mapRef={mapRef} />
