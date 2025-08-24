@@ -186,6 +186,7 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
         tags: [
           ['g', geohash],
           ['n', session.nickname],
+          ['t', 'teleport'],
           ['client', 'bitmap-chat']
         ],
         content,
