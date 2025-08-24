@@ -198,7 +198,7 @@ const EventPopup = React.memo(({ point, onOpenChat }: {
 
 export function EphemeralHeatMap({ className }: { className?: string }) {
   const [selectedGeohash, setSelectedGeohash] = useState<string | null>(null);
-  const { data: events, isLoading, error } = useEphemeralEvents(selectedGeohash || undefined);
+  const { data: events, isLoading, error, isFetching } = useEphemeralEvents(selectedGeohash || undefined);
 
   // Don't show loading overlay when in chat mode (selectedGeohash is set)
   const showLoadingOverlay = isLoading && !selectedGeohash;
@@ -215,6 +215,14 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const [teleportGeohash, setTeleportGeohash] = useState('');
   const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
   const mapRef = React.useRef<L.Map | null>(null);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+
+  // Track initial load completion for progressive loading
+  useEffect(() => {
+    if (!isLoading && events && events.length > 0 && !initialLoadComplete) {
+      setInitialLoadComplete(true);
+    }
+  }, [isLoading, events, initialLoadComplete]);
 
   // Prevent default context menu on mobile devices
   useEffect(() => {
@@ -503,8 +511,10 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       <div className="absolute top-4 right-4 flex gap-1 z-10">
         <div className="bg-black/80 border border-green-500/30 rounded-lg p-2 font-mono text-xs z-10">
           <div className="flex items-center gap-2 text-green-400">
-            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-            <span>LIVE - {filteredEvents?.length || 0} EVENTS</span>
+            <div className="w-2 h-2 rounded-full nimate-pulse bg-green-400"></div>
+            <span>
+              {isFetching && !initialLoadComplete ? 'LOADING' : 'LIVE'} - {filteredEvents?.length || 0} EVENTS
+            </span>
           </div>
         </div>
 

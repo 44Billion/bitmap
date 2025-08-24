@@ -1,18 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNostr } from '@nostrify/react';
-import type { NostrEvent, NostrRelayEVENT, NostrRelayEOSE, NostrRelayCLOSED } from '@nostrify/nostrify';
+import type { NostrEvent } from '@nostrify/nostrify';
 import { truncateNickname } from '@/lib/utils';
 import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
 import {
   groupRelaysByRegion,
   createIntelligentCoverageStrategy,
-  getRotatingRelaySelection,
-  getCoverageStats
+  getRotatingRelaySelection
 } from '@/lib/relayCoverage';
-import { createCoverageVisualization, generateCoverageReport } from '@/lib/coverageVisualizer';
 import { decode } from 'ngeohash';
-
-type NostrMessage = NostrRelayEVENT | NostrRelayEOSE | NostrRelayCLOSED;
 
 export interface EphemeralEventData {
   event: NostrEvent;
@@ -51,217 +47,176 @@ export function useEphemeralEvents(targetGeohash?: string) {
   return useQuery({
     queryKey: ['ephemeral-events', targetGeohash],
     queryFn: async (c) => {
-      const signal = AbortSignal.any([c.signal, AbortSignal.timeout(30000)]);
-
-      let relayUrls: string[] = [];
+      const signal = AbortSignal.any([c.signal, AbortSignal.timeout(120000)]); // Increased timeout to 2 minutes for more comprehensive loading
 
       if (targetGeohash) {
-        // CHAT MODE: Target geohash provided, find closest 5 relays for optimal chat performance
-        console.log('🎯 CHAT MODE: Finding closest relays for geohash:', targetGeohash, '(500 events per relay)');
+        // CHAT MODE: Find closest relays for chat
+        console.log('🎯 CHAT MODE: Finding closest relays for geohash:', targetGeohash);
         try {
           const geoRelays = await fetchGeoRelays();
           const { latitude, longitude } = decode(targetGeohash);
           const closestRelays = findClosestRelays(geoRelays, latitude, longitude, 5);
-          relayUrls = closestRelays.map(relay => relay.url);
-          console.log('✅ Selected closest relays for chat:', relayUrls, '(500 events each)');
+          const relayUrls = closestRelays.map(relay => relay.url);
+          console.log('✅ Selected closest relays for chat:', relayUrls);
+
+          // Simple chat mode query
+          const events = await nostr.query([{ kinds: [20000], limit: 500 }], { signal, relays: relayUrls });
+          return events.filter(validateEphemeralEvent).map(transformEphemeralEvent);
         } catch (error) {
-          console.error('❌ Failed to fetch geo relays for target geohash:', error);
-          // Fallback to all georelays if specific targeting fails
-          try {
-            const allGeoRelays = await fetchGeoRelays();
-            relayUrls = allGeoRelays.map(relay => relay.url);
-            console.log('⚠️ Fallback: Using all relays for chat:', relayUrls.length, 'relays (500 events each)');
-          } catch (fallbackError) {
-            console.error('❌ Failed to fetch fallback relays:', fallbackError);
-            relayUrls = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
-            console.log('⚠️ Emergency fallback: Using default relays (500 events each)');
-          }
-        }
-      } else {
-        // MAP MODE: Intelligent regional coverage + default relays for comprehensive global monitoring
-        console.log('🗺️  MAP MODE: Creating hybrid coverage strategy (regional + default)');
-        try {
-          const geoRelays = await fetchGeoRelays();
-
-          // Default relays for comprehensive coverage (500 events each)
-          const defaultRelays = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
-
-          // Group relays by geographic region
-          const regionGroups = groupRelaysByRegion(geoRelays);
-
-          // Create intelligent coverage strategy (max 25 relays, ~2-3 per region)
-          const strategy = createIntelligentCoverageStrategy(geoRelays.length, 25);
-
-          // Get rotating selection for this session
-          const rotationIndex = Math.floor(Date.now() / 300000) % 10; // Rotate every 5 minutes
-          const selectedRegionalRelays = getRotatingRelaySelection(regionGroups, strategy, rotationIndex);
-
-          // Remove default relays from regional selection to avoid duplication
-          const filteredRegionalRelays = selectedRegionalRelays.filter(
-            regionalRelay => !defaultRelays.includes(regionalRelay.url)
-          );
-
-          // Combine filtered regional relays with default relays
-          const allSelectedRelays = [...filteredRegionalRelays];
-          defaultRelays.forEach(defaultRelayUrl => {
-            const defaultRelay = geoRelays.find(r => r.url === defaultRelayUrl);
-            if (defaultRelay) {
-              allSelectedRelays.push(defaultRelay);
-            } else {
-              // Add default relay even if not in georelays
-              allSelectedRelays.push({
-                url: defaultRelayUrl,
-                latitude: 0, // Default coordinates
-                longitude: 0
-              });
-            }
-          });
-
-          relayUrls = allSelectedRelays.map(relay => relay.url);
-
-          // Get coverage statistics and visualization (using filtered regional relays)
-          const stats = getCoverageStats(regionGroups, strategy);
-          const visualization = createCoverageVisualization(geoRelays, filteredRegionalRelays, 'hybrid');
-
-          // Calculate deduplication stats
-          const duplicateCount = selectedRegionalRelays.length - filteredRegionalRelays.length;
-
-          console.log(`🌍 Hybrid coverage strategy (Regional + Default):`);
-          console.log(`   📊 Covered regions: ${stats.coveredRegions.join(', ')}`);
-          console.log(`   📡 Regional relays: ${filteredRegionalRelays.length} (${stats.coveragePercentage}% coverage)`);
-          console.log(`   🌟 Default relays: ${defaultRelays.length} (500 events each)`);
-          console.log(`   🔄 Total concurrent relays: ${relayUrls.length}`);
-          console.log(`   🔄 Rotation index: ${rotationIndex} (changes every 5 minutes)`);
-          console.log(`   📈 Average relays per region: ${stats.averageRelaysPerRegion}`);
-          console.log(`   🎯 Regional: 200 events, Default: 500 events`);
-          if (duplicateCount > 0) {
-            console.log(`   ✅ Deduplicated: ${duplicateCount} relay(s) removed from regional selection`);
-          }
-          console.log(`\n${generateCoverageReport(visualization)}`);
-          console.log(`\n🌟 Default relays (500 events each): ${defaultRelays.join(', ')}`);
-
-        } catch (error) {
-          console.error('❌ Failed to create hybrid coverage strategy:', error);
-          // Fallback to default relays only
-          relayUrls = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
-          console.log('⚠️ Fallback: Using default relays for map (500 events each)');
+          console.error('❌ Failed to fetch geo relays for chat, using defaults:', error);
+          const fallbackRelays = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
+          const events = await nostr.query([{ kinds: [20000], limit: 500 }], { signal, relays: fallbackRelays });
+          return events.filter(validateEphemeralEvent).map(transformEphemeralEvent);
         }
       }
 
-      // Use nostr.req to subscribe to events instead of querying
-      const events: NostrEvent[] = [];
+      // MAP MODE: Sophisticated progressive loading with relay rotation
+      console.log('🗺️  MAP MODE: Progressive loading with intelligent relay rotation');
 
-      return new Promise<EphemeralEventData[]>((resolve, reject) => {
-        let eoseCount = 0;
-        let expectedEoseCount = 1;
-        const subscriptions: AsyncIterable<NostrMessage>[] = [];
+      const defaultRelays = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
+      const allEvents: NostrEvent[] = [];
+      const failedRelays = new Set<string>();
 
-        const timeoutId = setTimeout(() => {
-          // Timeout reached, resolve with what we have
-          const validEvents = events
-            .filter(validateEphemeralEvent)
-            .map(transformEphemeralEvent);
-          console.log('⏰ Subscription timeout reached, resolving with', validEvents.length, 'events');
-          resolve(validEvents);
-        }, 30000);
+      // Phase 1: Quick load from default relays (render map ASAP)
+      try {
+        console.log('🌟 Phase 1: Loading from default relays for initial render...');
+        const defaultEvents = await nostr.query([{ kinds: [20000], limit: 300 }], {
+          signal: AbortSignal.timeout(8000), // Short timeout for fast initial load
+          relays: defaultRelays
+        });
 
-        try {
-          // For map mode, we may need multiple subscriptions with different limits
-          if (!targetGeohash && relayUrls.length > 3) {
-            // Hybrid map mode: regional relays (200 events) + default relays (500 events)
-            const defaultRelays = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
-            const regionalRelays = relayUrls.filter(url => !defaultRelays.includes(url));
+        allEvents.push(...defaultEvents);
+        console.log('✅ Phase 1 complete:', defaultEvents.length, 'events from default relays');
 
-            expectedEoseCount = 0;
+        // Log initial results for debugging
+        const initialResults = allEvents.filter(validateEphemeralEvent).map(transformEphemeralEvent);
+        if (initialResults.length > 0) {
+          console.log('🚀 Initial map render ready with', initialResults.length, 'events');
+        }
+      } catch (error) {
+        console.error('❌ Phase 1 failed:', error);
+        defaultRelays.forEach(relay => failedRelays.add(relay));
+      }
 
-            // Subscription 1: Regional relays with 200 events
-            if (regionalRelays.length > 0) {
-              console.log('📡 Creating regional subscription (200 events) for', regionalRelays.length, 'relays');
-              const regionalSubscription = nostr.req(
-                [{ kinds: [20000], limit: 200 }],
-                { signal, relays: regionalRelays }
-              );
-              subscriptions.push(regionalSubscription);
-              expectedEoseCount++;
+      // Phase 2: Progressive loading from geographic relays with rotation
+      try {
+        const geoRelays = await fetchGeoRelays();
+
+        // Group relays by region for intelligent rotation
+        const regionGroups = groupRelaysByRegion(geoRelays);
+        const strategy = createIntelligentCoverageStrategy(geoRelays.length, 20);
+        const rotationIndex = Math.floor(Date.now() / 300000) % 10;
+        const selectedRegionalRelays = getRotatingRelaySelection(regionGroups, strategy, rotationIndex);
+
+        // Filter out failed default relays and duplicates
+        const availableRegionalRelays = selectedRegionalRelays.filter(
+          relay => !failedRelays.has(relay.url) && !defaultRelays.includes(relay.url)
+        );
+
+        // Process relays in larger batches for better throughput
+        const batchSize = 8;
+        for (let i = 0; i < availableRegionalRelays.length; i += batchSize) {
+          const batch = availableRegionalRelays.slice(i, i + batchSize);
+          const batchRelayUrls = batch.map(r => r.url);
+
+          try {
+            const batchEvents = await Promise.allSettled(
+              batchRelayUrls.map(relayUrl =>
+                nostr.query([{ kinds: [20000], limit: 200 }], {
+                  signal: AbortSignal.timeout(8000), // Longer timeout per relay for better success rate
+                  relays: [relayUrl]
+                }).catch(error => {
+                  console.warn(`❌ Relay ${relayUrl} failed, marking for rotation:`, error.message);
+                  failedRelays.add(relayUrl);
+                  return []; // Return empty array on failure
+                })
+              )
+            );
+
+            // Add successful results
+            batchEvents.forEach(result => {
+              if (result.status === 'fulfilled') {
+                allEvents.push(...result.value);
+              }
+            });
+
+            // Small delay between batches to avoid rate limiting
+            if (i + batchSize < availableRegionalRelays.length) {
+              await new Promise(resolve => setTimeout(resolve, 200));
             }
 
-            // Subscription 2: Default relays with 500 events
-            console.log('🌟 Creating default subscription (500 events) for', defaultRelays.length, 'relays');
-            const defaultSubscription = nostr.req(
-              [{ kinds: [20000], limit: 500 }],
-              { signal, relays: defaultRelays }
-            );
-            subscriptions.push(defaultSubscription);
-            expectedEoseCount++;
+          } catch (batchError) {
+            // Mark all relays in this batch as failed
+            batchRelayUrls.forEach(url => failedRelays.add(url));
+          }
+        }
+      } catch (geoError) {
+        console.error('❌ Phase 2 geographic loading failed:', geoError);
+      }
 
-          } else {
-            // Single subscription for chat mode or fallback scenarios
-            const limit = targetGeohash ? 500 : 200;
-            console.log('📡 Creating single subscription (', limit, 'events) for', relayUrls.length, 'relays');
+      // Phase 3: Relay rotation for failed connections
+      if (failedRelays.size > 0) {
+        try {
+          const geoRelays = await fetchGeoRelays();
+          const failedRelayArray = Array.from(failedRelays);
 
-            const subscription = nostr.req(
-              [{ kinds: [20000], limit }],
-              { signal, relays: relayUrls }
-            );
-            subscriptions.push(subscription);
+          // Find backup relays from the same regions as failed ones
+          const backupRelays: string[] = [];
+
+          for (const failedRelayUrl of failedRelayArray) {
+            const failedRelay = geoRelays.find(r => r.url === failedRelayUrl);
+            if (failedRelay) {
+              // Find relays from same region that haven't been tried yet
+              const regionRelays = geoRelays.filter(r =>
+                Math.abs(r.latitude - failedRelay.latitude) < 10 &&
+                Math.abs(r.longitude - failedRelay.longitude) < 10 &&
+                !failedRelays.has(r.url) &&
+                !backupRelays.includes(r.url) &&
+                !defaultRelays.includes(r.url)
+              );
+
+              // Take up to 4 backup relays per failed relay for better coverage
+              regionRelays.slice(0, 4).forEach(backup => {
+                backupRelays.push(backup.url);
+              });
+            }
           }
 
-          // Process all subscriptions asynchronously
-          const processSubscription = async (subscription: AsyncIterable<NostrMessage>, subscriptionIndex: number) => {
-            try {
-              for await (const message of subscription) {
-                if (message[0] === 'EVENT') {
-                  const event = message[2];
-                  events.push(event);
-                } else if (message[0] === 'EOSE') {
-                  console.log(`✅ EOSE received for subscription ${subscriptionIndex + 1}/${subscriptions.length}`);
-                  eoseCount++;
-                  if (eoseCount >= expectedEoseCount) {
-                    clearTimeout(timeoutId);
-                    // All subscriptions reached EOSE, filter and transform
-                    const validEvents = events
-                      .filter(validateEphemeralEvent)
-                      .map(transformEphemeralEvent);
-                    console.log('🎉 All subscriptions completed, total events:', validEvents.length);
-                    resolve(validEvents);
-                  }
-                } else if (message[0] === 'CLOSED') {
-                  console.log(`🔚 Subscription ${subscriptionIndex + 1}/${subscriptions.length} closed`);
-                  eoseCount++;
-                  if (eoseCount >= expectedEoseCount) {
-                    clearTimeout(timeoutId);
-                    // Connection closed, resolve with what we have
-                    const validEvents = events
-                      .filter(validateEphemeralEvent)
-                      .map(transformEphemeralEvent);
-                    console.log('🔚 All subscriptions closed, total events:', validEvents.length);
-                    resolve(validEvents);
-                  }
-                }
-              }
-            } catch (error) {
-              console.error(`Error in subscription ${subscriptionIndex + 1}:`, error);
-              eoseCount++;
-              if (eoseCount >= expectedEoseCount) {
-                clearTimeout(timeoutId);
-                resolve(events
-                  .filter(validateEphemeralEvent)
-                  .map(transformEphemeralEvent));
-              }
-            }
-          };
+          if (backupRelays.length > 0) {
+            const backupEvents = await Promise.allSettled(
+              backupRelays.map(relayUrl =>
+                nostr.query([{ kinds: [20000], limit: 100 }], {
+                  signal: AbortSignal.timeout(5000),
+                  relays: [relayUrl]
+                }).catch(error => {
+                  console.warn(`❌ Backup relay ${relayUrl} also failed:`, error.message);
+                  return [];
+                })
+              )
+            );
 
-          // Start processing all subscriptions
-          subscriptions.forEach((subscription, index) => {
-            processSubscription(subscription, index);
-          });
+            // Add successful backup results
+            backupEvents.forEach(result => {
+              if (result.status === 'fulfilled') {
+                allEvents.push(...result.value);
+              }
+            });
 
-        } catch (error) {
-          clearTimeout(timeoutId);
-          console.error('Failed to create subscription(s):', error);
-          reject(error);
+            const backupEventCount = backupEvents.reduce((sum, result) =>
+              sum + (result.status === 'fulfilled' ? result.value.length : 0), 0
+            );
+          }
+        } catch (rotationError) {
+          console.error('❌ Phase 3 relay rotation failed:', rotationError);
         }
-      });
+      }
+
+      // Deduplicate events by ID
+      const uniqueEvents = Array.from(
+        new Map(allEvents.map(event => [event.id, event])).values()
+      );
+
+      return uniqueEvents.filter(validateEphemeralEvent).map(transformEphemeralEvent);
     },
     refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
     staleTime: 5000, // Consider data stale after 5 seconds
