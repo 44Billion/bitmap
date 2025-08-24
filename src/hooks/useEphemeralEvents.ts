@@ -3,11 +3,7 @@ import { useNostr } from '@nostrify/react';
 import type { NostrEvent } from '@nostrify/nostrify';
 import { truncateNickname } from '@/lib/utils';
 import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
-import {
-  groupRelaysByRegion,
-  createIntelligentCoverageStrategy,
-  getRotatingRelaySelection
-} from '@/lib/relayCoverage';
+// Removed unused relay coverage imports for simplified relay management
 import { decode } from 'ngeohash';
 import { useDisabledRelays } from '@/hooks/useDisabledRelays';
 
@@ -57,7 +53,7 @@ export function useEphemeralEvents(targetGeohash?: string) {
         try {
           const geoRelays = await fetchGeoRelays();
           const { latitude, longitude } = decode(targetGeohash);
-          const closestRelays = findClosestRelays(geoRelays, latitude, longitude, 10); // Increased to 10 for better fallback
+          const closestRelays = findClosestRelays(geoRelays, latitude, longitude, 8); // Use 8 closest relays for better coverage
           const closestRelayUrls = closestRelays.map(relay => relay.url);
           const enabledClosestRelays = getEnabledRelays(closestRelayUrls);
           console.log('✅ Selected closest relays for chat:', enabledClosestRelays);
@@ -123,16 +119,13 @@ export function useEphemeralEvents(targetGeohash?: string) {
         allDefaultRelays.forEach(relay => failedRelays.add(relay));
       }
 
-      // Phase 2: Progressive loading from geographic relays with rotation
+      // Phase 2: Geographic relay loading with rotation (max 8 relays)
       try {
         const geoRelays = await fetchGeoRelays();
 
-        // Group relays by region for intelligent rotation
-        const regionGroups = groupRelaysByRegion(geoRelays);
-        // Remove 100 relay limit - use all available regional relays
-        const strategy = createIntelligentCoverageStrategy(geoRelays.length, geoRelays.length);
-        const rotationIndex = Math.floor(Date.now() / 300000) % 10;
-        const selectedRegionalRelays = getRotatingRelaySelection(regionGroups, strategy, rotationIndex);
+        // Use 8 rotating relays for geographic coverage
+        const rotationIndex = Math.floor(Date.now() / 300000) % geoRelays.length;
+        const selectedRegionalRelays = geoRelays.slice(rotationIndex, rotationIndex + 8);
 
         // Filter out failed default relays, disabled relays, and duplicates
         const availableRegionalRelays = selectedRegionalRelays.filter(
@@ -141,8 +134,8 @@ export function useEphemeralEvents(targetGeohash?: string) {
                    getEnabledRelays([relay.url]).length > 0
         );
 
-        // Process relays in larger batches for better throughput
-        const batchSize = 8;
+        // Process geographic relays in batches of 4 for better throughput
+        const batchSize = 4;
         for (let i = 0; i < availableRegionalRelays.length; i += batchSize) {
           const batch = availableRegionalRelays.slice(i, i + batchSize);
           const batchRelayUrls = batch.map(r => r.url);
@@ -151,12 +144,12 @@ export function useEphemeralEvents(targetGeohash?: string) {
             const batchEvents = await Promise.allSettled(
               batchRelayUrls.map(relayUrl =>
                 nostr.query([{ kinds: [20000], limit: 200 }], {
-                  signal: AbortSignal.timeout(8000), // Longer timeout per relay for better success rate
+                  signal: AbortSignal.timeout(8000),
                   relays: [relayUrl]
                 }).catch(error => {
-                  console.warn(`❌ Relay ${relayUrl} failed, marking for rotation:`, error.message);
+                  console.warn(`❌ Geographic relay ${relayUrl} failed:`, error.message);
                   failedRelays.add(relayUrl);
-                  return []; // Return empty array on failure
+                  return [];
                 })
               )
             );
@@ -172,7 +165,6 @@ export function useEphemeralEvents(targetGeohash?: string) {
             if (i + batchSize < availableRegionalRelays.length) {
               await new Promise(resolve => setTimeout(resolve, 200));
             }
-
           } catch {
             // Mark all relays in this batch as failed
             batchRelayUrls.forEach(url => failedRelays.add(url));
@@ -182,7 +174,7 @@ export function useEphemeralEvents(targetGeohash?: string) {
         console.error('❌ Phase 2 geographic loading failed:', geoError);
       }
 
-      // Phase 3: Relay rotation for failed connections
+      // Phase 3: Backup relay rotation for failed connections (max 5 relays)
       if (failedRelays.size > 0) {
         try {
           const geoRelays = await fetchGeoRelays();
@@ -191,7 +183,7 @@ export function useEphemeralEvents(targetGeohash?: string) {
           // Find backup relays from the same regions as failed ones
           const backupRelays: string[] = [];
 
-          for (const failedRelayUrl of failedRelayArray) {
+          for (const failedRelayUrl of failedRelayArray.slice(0, 5)) { // Limit to 5 failed relays
             const failedRelay = geoRelays.find(r => r.url === failedRelayUrl);
             if (failedRelay) {
               // Find relays from same region that haven't been tried yet
@@ -203,16 +195,19 @@ export function useEphemeralEvents(targetGeohash?: string) {
                 !allDefaultRelays.includes(r.url)
               );
 
-              // Take up to 4 backup relays per failed relay for better coverage
-              regionRelays.slice(0, 4).forEach(backup => {
+              // Take up to 2 backup relays per failed relay
+              regionRelays.slice(0, 2).forEach(backup => {
                 backupRelays.push(backup.url);
               });
             }
           }
 
-          if (backupRelays.length > 0) {
+          // Limit to max 5 backup relays total
+          const limitedBackupRelays = backupRelays.slice(0, 5);
+
+          if (limitedBackupRelays.length > 0) {
             const backupEvents = await Promise.allSettled(
-              backupRelays.map(relayUrl =>
+              limitedBackupRelays.map(relayUrl =>
                 nostr.query([{ kinds: [20000], limit: 100 }], {
                   signal: AbortSignal.timeout(5000),
                   relays: [relayUrl]

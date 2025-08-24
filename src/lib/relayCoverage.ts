@@ -67,13 +67,13 @@ interface CoverageStrategy {
 
 export function createIntelligentCoverageStrategy(
   totalRelaysAvailable: number,
-  maxConcurrentRelays: number = 100
+  maxConcurrentRelays: number = 20
 ): CoverageStrategy {
-  // Use all available regions for maximum coverage
-  const regionsToCover = REGIONS.length;
+  // Use a reasonable number of regions for good coverage
+  const regionsToCover = Math.min(6, REGIONS.length);
 
-  // Calculate relays per region - aim for more relays per region for better coverage
-  const relaysPerRegion = Math.min(12, Math.floor(maxConcurrentRelays / regionsToCover));
+  // Calculate relays per region - aim for 2-3 per region for balanced coverage
+  const relaysPerRegion = Math.min(3, Math.floor(maxConcurrentRelays / regionsToCover));
 
   // Select regions with best geographic distribution
   const selectedRegions = selectBalancedRegions(regionsToCover);
@@ -81,7 +81,7 @@ export function createIntelligentCoverageStrategy(
   return {
     regions: selectedRegions,
     relaysPerRegion,
-    totalRelays: selectedRegions.length * relaysPerRegion,
+    totalRelays: Math.min(maxConcurrentRelays, selectedRegions.length * relaysPerRegion),
   };
 }
 

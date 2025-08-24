@@ -100,8 +100,8 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] bg-black border border-green-500/30 overflow-hidden">
-        <DialogHeader className="border-b border-green-500/20 pb-4 flex-shrink-0">
+      <DialogContent className="max-w-4xl h-full sm:max-h-[80vh] bg-black border border-green-500/30 overflow-hidden p-4 sm:p-6 flex flex-col">
+        <DialogHeader className="border-b border-green-500/20 sm:pb-4">
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2 text-green-400 font-mono">
               <List className="h-5 w-5" />
@@ -135,10 +135,10 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto max-h-[60vh] p-4 space-y-4">
+        <div className="overflow-y-auto sm:p-4 space-y-4 flex-grow">
           {/* Primary Relays Section */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-cyan-400 font-mono text-sm border-b border-cyan-500/30 pb-2">
+            <div className="flex items-center gap-2 text-cyan-400 font-mono text-sm border-b border-cyan-500/30 pb-1 sm:pb-2">
               <Globe className="h-4 w-4" />
               <span>PRIMARY RELAYS</span>
               <span className="text-xs text-gray-500">({presetRelays.length} active)</span>
@@ -147,7 +147,7 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
             <div className="space-y-1">
               {presetRelays.map((relay) => (
                 <div key={relay.url}>
-                  <div className="flex items-center gap-2 py-2">
+                  <div className="flex items-center gap-2 py-1 sm:py-2">
                     <button
                       onClick={() => toggleRelay(relay.url)}
                       className={cn(
@@ -178,8 +178,8 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
                     </span>
                   </div>
 
-                  <div className="ml-6">
-                    <div className="flex items-center justify-between text-xs bg-gray-900/20 border border-gray-700/30 rounded p-2">
+                  <div className="sm:ml-6">
+                    <div className="flex items-center justify-between text-xs bg-gray-900/20 border border-gray-700/30 rounded p-1 sm:p-2">
                       <span className="text-gray-300 font-mono truncate">
                         {relay.url.replace(/^wss?:\/\//, '')}
                       </span>
@@ -198,14 +198,14 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
 
           {/* Regional Relays Section */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-purple-400 font-mono text-sm border-b border-purple-500/30 pb-2">
+            <div className="flex items-center gap-2 text-purple-400 font-mono text-sm border-b border-purple-500/30 pb-1 sm:pb-2">
               <MapPin className="h-4 w-4" />
               <span>REGIONAL RELAYS</span>
               <span className="text-xs text-gray-500">({geoRelays.length} total)</span>
             </div>
 
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-4 sm:py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-green-400" />
                 <span className="ml-2 text-green-400 font-mono text-sm">LOADING REGIONAL RELAYS...</span>
               </div>
@@ -215,7 +215,7 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
                   const enabledCount = getEnabledRelaysInRegion(group.relays).length;
                   return (
                     <div key={group.region.name}>
-                      <div className="flex items-center gap-2 py-2">
+                      <div className="flex items-center gap-2 py-1 sm:py-2">
                         <button
                           onClick={() => toggleRegionRelays(group.relays.map(r => r.url))}
                           className={cn(
@@ -280,11 +280,11 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
                       </div>
 
                       {group.relays.length > 0 ? (
-                        <div className="ml-6 space-y-1">
+                        <div className="sm:ml-6 space-y-1">
                           {group.relays.map((relay) => (
                             <div
                               key={relay.url}
-                              className="flex items-center justify-between text-xs bg-gray-900/20 border border-gray-700/30 rounded p-2"
+                              className="flex items-center justify-between text-xs bg-gray-900/20 border border-gray-700/30 rounded p-1 sm:p-2"
                             >
                               <div className="flex items-center gap-2 flex-1">
                                 <button
@@ -302,10 +302,16 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
                                   )}
                                 </button>
                                 <span className={cn(
-                                  "font-mono truncate flex-1",
+                                  "font-mono truncate flex-1 hidden sm:flex",
                                   isRelayDisabled(relay.url) ? "text-red-400 line-through" : "text-gray-300"
                                 )}>
                                   {relay.url.replace(/^wss?:\/\//, '')}
+                                </span>
+                                <span className={cn(
+                                  "font-mono truncate flex-1 flex sm:hidden",
+                                  isRelayDisabled(relay.url) ? "text-red-400 line-through" : "text-gray-300"
+                                )}>
+                                  {relay.url.length >= 22 ? `${relay.url.replace(/^wss?:\/\//, '').slice(0,22)}...` : relay.url.replace(/^wss?:\/\//, '') }
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
@@ -341,8 +347,8 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
 
           {/* Summary Statistics */}
           {!isLoading && (
-            <div className="bg-gray-900/30 border border-green-500/20 rounded-lg p-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="bg-gray-900/30 border border-green-500/20 rounded-lg p-2 sm:p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 text-center">
                 <div>
                   <div className="text-2xl font-bold text-green-400 font-mono">
                     {presetRelays.length + geoRelays.length}
@@ -368,7 +374,7 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
                   <div className="text-xs text-gray-500 font-mono">ENABLED REGIONAL</div>
                 </div>
               </div>
-              <div className="mt-3 text-xs text-gray-500 font-mono text-center">
+              <div className="mt-1 sm:mt-3 text-xs text-gray-500 font-mono text-center">
                 {disabledRelays.size > 0 && (
                   <span>{disabledRelays.size} relays disabled • </span>
                 )}
@@ -379,7 +385,7 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-green-500/20 p-4 flex-shrink-0">
+        <div className="border-t border-green-500/20 p-2 sm:p-4">
           <div className="flex items-center justify-between text-xs text-gray-500 font-mono">
             <div>
               Network status: {isLoading ? 'Loading...' : `${geoRelays.length} relays available`}

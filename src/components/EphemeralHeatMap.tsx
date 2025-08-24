@@ -199,10 +199,14 @@ const EventPopup = React.memo(({ point, onOpenChat }: {
 
 export function EphemeralHeatMap({ className }: { className?: string }) {
   const [selectedGeohash, setSelectedGeohash] = useState<string | null>(null);
-  const { data: events, isLoading, error, isFetching } = useEphemeralEvents(selectedGeohash || undefined);
+  const { data: globalEvents, isLoading: globalLoading, error: globalError, isFetching: globalFetching } = useEphemeralEvents(undefined);
+  const { data: chatEvents } = useEphemeralEvents(selectedGeohash || undefined);
+
+  // Use appropriate events data based on context
+  const events = selectedGeohash ? chatEvents : globalEvents;
 
   // Don't show loading overlay when in chat mode (selectedGeohash is set)
-  const showLoadingOverlay = isLoading && !selectedGeohash;
+  const showLoadingOverlay = globalLoading && !selectedGeohash;
   const [mapCenter, setMapCenter] = useState<LatLngExpression>([40.7128, -74.0060]); // Default to NYC
   const [highlightedGeohash, setHighlightedGeohash] = useState<string | null>(null);
   const { spamFilterEnabled, toggleSpamFilter } = useSpamFilter();
@@ -221,10 +225,10 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
 
   // Track initial load completion for progressive loading
   useEffect(() => {
-    if (!isLoading && events && events.length > 0 && !initialLoadComplete) {
+    if (!globalLoading && globalEvents && globalEvents.length > 0 && !initialLoadComplete) {
       setInitialLoadComplete(true);
     }
-  }, [isLoading, events, initialLoadComplete]);
+  }, [globalLoading, globalEvents, initialLoadComplete]);
 
   // Prevent default context menu on mobile devices
   useEffect(() => {
@@ -274,6 +278,32 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       events.find(event => event.event.id === filteredMsg.event.id)!
     ).filter(Boolean);
   }, [events, spamFilterEnabled]);
+
+  // Apply spam filtering to global events for the counter
+  const filteredGlobalEvents = useMemo(() => {
+    if (!globalEvents || globalEvents.length === 0) {
+      return [];
+    }
+
+    // If spam filtering is disabled, return all global events
+    if (!spamFilterEnabled) {
+      return globalEvents;
+    }
+
+    // Convert to EphemeralEventMessage format for filtering
+    const eventMessages: EphemeralEventMessage[] = globalEvents.map(event => ({
+      event: event.event,
+      message: event.message
+    }));
+
+    // Apply filtering
+    const filteredEventMessages = filterMessages(eventMessages);
+
+    // Convert back to EphemeralEventData format
+    return filteredEventMessages.map(filteredMsg =>
+      globalEvents.find(event => event.event.id === filteredMsg.event.id)!
+    ).filter(Boolean);
+  }, [globalEvents, spamFilterEnabled]);
 
   // Process filtered events into heat map points
   const heatMapPoints = useMemo(() => {
@@ -419,7 +449,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     );
   }
 
-  if (error) {
+  if (globalError) {
     return (
       <div className={cn("bg-black flex items-center justify-center", className)}>
         <div className="text-center text-red-400 font-mono">
@@ -515,7 +545,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
           <div className="flex items-center gap-2 text-green-400">
             <div className="w-2 h-2 rounded-full nimate-pulse bg-green-400"></div>
             <span>
-              {isFetching && !initialLoadComplete ? 'LOADING' : 'LIVE'} - {filteredEvents?.length || 0} EVENTS
+              {globalFetching && !initialLoadComplete ? 'LOADING' : 'LIVE'} - {filteredGlobalEvents?.length || 0} EVENTS
             </span>
           </div>
         </div>
