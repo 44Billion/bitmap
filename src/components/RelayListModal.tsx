@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { List, X, Wifi, Globe, MapPin, Loader2, RefreshCw, WifiOff } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useDisabledRelays } from '@/hooks/useDisabledRelays';
@@ -122,15 +122,16 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
                 )}
                 <span className="sr-only">Refresh</span>
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-                className="text-gray-400 hover:text-gray-300 hover:bg-gray-500/10"
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </Button>
+              <DialogClose asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-green-500 hover:text-green-400 hover:bg-green-500/20 rounded-sm"
+                >
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close</span>
+                </Button>
+              </DialogClose>
             </div>
           </div>
         </DialogHeader>
