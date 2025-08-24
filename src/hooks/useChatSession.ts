@@ -5,6 +5,8 @@ import { useCurrentUser } from './useCurrentUser';
 import { useEphemeralIdentity } from './useEphemeralIdentity';
 import { finalizeEvent } from 'nostr-tools';
 import { isCompleteRelayFailure, truncateNickname } from '@/lib/utils';
+import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
+import { decode } from 'ngeohash';
 import type { NostrEvent } from '@nostrify/nostrify';
 
 export interface EphemeralEventMessage {
@@ -172,6 +174,32 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
     }
   }, [geohash, queryClient]);
 
+  // Helper function to get chat relays (default + closest relays for geohash)
+  const getChatRelays = useCallback(async (targetGeohash: string): Promise<string[]> => {
+    const defaultRelays = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
+
+    try {
+      console.log('🎯 CHAT SEND MODE: Finding closest relays for geohash:', targetGeohash);
+      const geoRelays = await fetchGeoRelays();
+      const { latitude, longitude } = decode(targetGeohash);
+      const closestRelays = findClosestRelays(geoRelays, latitude, longitude, 5);
+
+      // Combine closest relays with default relays, removing duplicates
+      const allRelays = new Set<string>(defaultRelays);
+      closestRelays.forEach(relay => allRelays.add(relay.url));
+
+      const relayUrls = Array.from(allRelays);
+      console.log('✅ Chat relay selection: Default (3) + Closest (', closestRelays.length, ') = Total (', relayUrls.length, ') relays');
+      console.log('🌟 Default relays:', defaultRelays);
+      console.log('📍 Closest relays:', closestRelays.map(r => r.url));
+
+      return relayUrls;
+    } catch (error) {
+      console.error('❌ Failed to fetch geo relays for chat send, using default relays only:', error);
+      return defaultRelays;
+    }
+  }, []);
+
   // Send message function
   const sendMessage = useCallback(async (content: string): Promise<boolean> => {
     if (!session || !geohash || !nostr) {
@@ -209,8 +237,14 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
       }
 
       try {
-        // Attempt to publish the event
-        await nostr.event(eventToPublish, { signal: AbortSignal.timeout(5000) });
+        // Get optimal relays for this chat (default + closest relays)
+        const chatRelays = await getChatRelays(geohash);
+
+        // Attempt to publish the event to chat-specific relays
+        await nostr.event(eventToPublish, {
+          signal: AbortSignal.timeout(5000),
+          relays: chatRelays
+        });
 
         // If we reach here, at least one relay succeeded (or it was a partial failure)
         // Update local cache immediately
@@ -227,12 +261,12 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
         return true;
       } catch (publishError) {
         if (isCompleteRelayFailure(publishError)) {
-          console.error('All relays failed to receive the message:', publishError);
+          console.error('All chat relays failed to receive the message:', publishError);
           return false; // Only return false if ALL relays failed
         }
 
         // For partial failures (some relays succeeded), we still consider it a success
-        console.warn('Some relays failed to receive the message, but at least one relay succeeded:', publishError);
+        console.warn('Some chat relays failed to receive the message, but at least one relay succeeded:', publishError);
 
         // Update local cache since at least one relay succeeded
         const chatKey = ['chat-messages', geohash];
@@ -251,7 +285,7 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
       console.error('Failed to send message:', error);
       return false;
     }
-  }, [session, geohash, nostr, queryClient, user]);
+  }, [session, geohash, nostr, queryClient, user, getChatRelays]);
 
   // Query for accessing cached chat messages (fetched by the effect above)
   const { data: _chatMessages = [] } = useQuery({

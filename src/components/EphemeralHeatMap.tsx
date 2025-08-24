@@ -199,6 +199,9 @@ const EventPopup = React.memo(({ point, onOpenChat }: {
 export function EphemeralHeatMap({ className }: { className?: string }) {
   const [selectedGeohash, setSelectedGeohash] = useState<string | null>(null);
   const { data: events, isLoading, error } = useEphemeralEvents(selectedGeohash || undefined);
+
+  // Don't show loading overlay when in chat mode (selectedGeohash is set)
+  const showLoadingOverlay = isLoading && !selectedGeohash;
   const [mapCenter, setMapCenter] = useState<LatLngExpression>([40.7128, -74.0060]); // Default to NYC
   const [highlightedGeohash, setHighlightedGeohash] = useState<string | null>(null);
   const { spamFilterEnabled, toggleSpamFilter } = useSpamFilter();
@@ -395,7 +398,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     });
   };
 
-  if (isLoading) {
+  if (showLoadingOverlay) {
     return (
       <div className={cn("bg-black flex items-center justify-center", className)}>
         <div className="text-center text-cyan-400 font-mono">
