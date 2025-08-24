@@ -568,7 +568,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       </div>
 
       {/* Secondary button container - below profile */}
-      <div className="absolute top-[76px] right-4 z-10">
+      <div className="absolute top-24 right-4 z-10">
         {/* Relay list button */}
         <Button
           onClick={() => setIsRelayListModalOpen(true)}
