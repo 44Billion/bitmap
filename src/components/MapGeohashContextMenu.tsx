@@ -11,11 +11,11 @@ interface GeohashOption {
 }
 
 const GEOHASH_OPTIONS: GeohashOption[] = [
-  { precision: 1, label: 'Continent', description: 'Continent-level precision (~5,000km)' },
-  { precision: 2, label: 'Large Region', description: 'Large region (~1,200km)' },
-  { precision: 3, label: 'State/Province', description: 'State/province (~150km)' },
-  { precision: 4, label: 'City', description: 'City-level (~20km)' },
-  { precision: 5, label: 'District', description: 'District-level (~2.4km)' },
+  { precision: 1, label: 'Continent', description: '(~5,000km)' },
+  { precision: 2, label: 'Large Region', description: '(~1,200km)' },
+  { precision: 3, label: 'State/Province', description: '(~150km)' },
+  { precision: 4, label: 'City', description: '(~20km)' },
+  { precision: 5, label: 'District', description: '(~2.4km)' },
 ];
 
 interface MapClickLocation {
@@ -114,11 +114,11 @@ function CustomContextMenu({
         style={menuStyle}
       >
         {/* Header */}
-        <div className="border-b border-green-500/20 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-green-400 font-mono">
-              <Activity className="h-4 w-4 sm:h-5 sm:w-5" />
-              <span className="text-sm sm:text-base">GEOHASH PRECISION</span>
+        <div className="border-b border-green-500/20 p-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-cyan-400 font-mono">
+              <MapPin className="h-4 w-4" />
+              <span className="text-sm">TELEPORT TO A GEOHASH</span>
             </div>
             {isMobile && (
               <button
@@ -129,14 +129,10 @@ function CustomContextMenu({
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1 text-xs text-cyan-400">
-            <MapPin className="h-3 w-3 flex-shrink-0" />
-            <span className="break-all">LAT: {location.lat.toFixed(4)}, LNG: {location.lng.toFixed(4)}</span>
-          </div>
         </div>
         
         {/* Menu items */}
-        <div className="py-2">
+        <div>
           {GEOHASH_OPTIONS.map((option) => {
             const geohash = encode(location.lat, location.lng, option.precision);
             return (
@@ -147,7 +143,7 @@ function CustomContextMenu({
                   onClose();
                 }}
                 className={`
-                  w-full text-left px-4 py-4
+                  w-full text-left px-2 py-2
                   hover:bg-green-500/10 active:bg-green-500/20
                   transition-colors border-b border-green-500/10 last:border-b-0
                   focus:outline-none focus:ring-2 focus:ring-green-500/50
@@ -155,20 +151,12 @@ function CustomContextMenu({
               >
                 {/* Precision level header */}
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-cyan-400 text-sm font-mono">{option.label}</span>
-                  <span className="text-xs text-gray-400 bg-black/50 px-2 py-1 rounded border border-green-500/20 whitespace-nowrap">
-                    Level {option.precision}
-                  </span>
-                </div>
-                
-                {/* Description */}
-                <div className="text-xs text-gray-500 mb-3 leading-relaxed">{option.description}</div>
-                
-                {/* Geohash display */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <span className="text-xs text-purple-400 whitespace-nowrap">GEOHASH:</span>
-                  <span className="text-xs text-purple-300 bg-black/70 px-2 py-1 rounded border border-purple-500/30 font-mono break-all">
-                    {geohash}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <span className="text-cyan-400 text-sm font-mono">{option.label}</span>
+                    <span className="text-xs text-gray-500 leading-relaxed">{option.description}</span>
+                  </div>
+                  <span className="text-xs text-purple-400 bg-black/70 px-2 py-1 rounded border border-purple-500/30 font-mono break-all">
+                    GEOHASH: {geohash}
                   </span>
                 </div>
               </button>
