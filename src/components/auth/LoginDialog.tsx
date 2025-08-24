@@ -353,13 +353,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
           </div>
         </DialogHeader>
 
-        <div className="flex-1 flex flex-col min-h-0 p-4 space-y-4">
-          {/* Status indicator */}
-          <div className="text-green-500 py-2 w-full font-mono text-xs">
-            <span className="animate-pulse">[READY] </span>
-            <span>Identity management terminal active.</span>
-          </div>
-
+        <div className="flex-1 flex flex-col min-h-0 pb-4 space-y-4">
           {/* Show current user status and actions */}
           {currentUser ? (
             <>
@@ -412,9 +406,9 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
             <>
               {/* Ephemeral identity exists */}
               <div className="space-y-4">
-                <div className="text-yellow-400 py-2 w-full font-mono text-xs leading-relaxed">
-                  <span>[WARNING] </span>
-                  <span>This ephemeral identity is temporary. Secure your key for future reuse.</span>
+                <div className="text-gray-500 pb-2 w-full font-mono text-xs leading-relaxed">
+                  <span>[INFO] </span>
+                  <span>Ephemeral identities are temporary and session-based. Secure your key if you want to reuse it later.</span>
                 </div>
 
                 {/* Key management options */}
@@ -550,13 +544,6 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
                   <UserIcon className="w-3 h-3 mr-2" />
                   [GENERATE EPHEMERAL IDENTITY]
                 </Button>
-
-                <div className="text-gray-500 py-2 w-full font-mono text-xs leading-relaxed">
-                  <span>[INFO] </span>
-                  <span>Ephemeral identities are temporary and session-based.</span><br/>
-                  <span>[INFO] </span>
-                  <span>Secure your key if you want to reuse it later.</span>
-                </div>
               </div>
 
               {/* Traditional login options */}
