@@ -229,11 +229,76 @@ export function MapGeohashContextMenuHandler({ onGeohashSelect }: MapGeohashCont
 
     const mapContainer = map.getContainer();
     let pressTimer: NodeJS.Timeout | null = null;
+    let initialTouchDistance: number | null = null;
+    let isPinching = false;
+    let touchStartPosition: { x: number; y: number } | null = null;
+
+    // Calculate distance between two touches for pinch detection
+    const getTouchDistance = (touches: TouchList): number => {
+      if (touches.length < 2) return 0;
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
 
     const handleTouchStart = (e: TouchEvent) => {
-      pressTimer = setTimeout(() => {
-        handleContextMenu(e);
-      }, 500); // 500ms long press
+      // Reset pinch detection state
+      isPinching = false;
+      initialTouchDistance = null;
+
+      // Only start long-press timer for single touch
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        touchStartPosition = { x: touch.clientX, y: touch.clientY };
+
+        pressTimer = setTimeout(() => {
+          // Only trigger if we're not pinching and still have single touch
+          if (!isPinching && e.touches.length === 1) {
+            handleContextMenu(e);
+          }
+        }, 500); // 500ms long press
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      // Cancel long-press if there's significant movement with single touch
+      if (pressTimer && e.touches.length === 1 && touchStartPosition) {
+        const touch = e.touches[0];
+        const startX = touchStartPosition.x;
+        const startY = touchStartPosition.y;
+        const moveThreshold = 10; // pixels
+
+        const distance = Math.sqrt(
+          Math.pow(touch.clientX - startX, 2) +
+          Math.pow(touch.clientY - startY, 2)
+        );
+
+        if (distance > moveThreshold) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+          touchStartPosition = null;
+        }
+      }
+
+      // Detect pinch zoom
+      if (e.touches.length >= 2) {
+        const currentDistance = getTouchDistance(e.touches);
+
+        if (initialTouchDistance === null) {
+          initialTouchDistance = currentDistance;
+        } else {
+          const distanceChange = Math.abs(currentDistance - initialTouchDistance);
+          // If distance changed significantly, we're pinching
+          if (distanceChange > 10) {
+            isPinching = true;
+            if (pressTimer) {
+              clearTimeout(pressTimer);
+              pressTimer = null;
+            }
+            touchStartPosition = null;
+          }
+        }
+      }
     };
 
     const handleTouchEnd = () => {
@@ -241,25 +306,22 @@ export function MapGeohashContextMenuHandler({ onGeohashSelect }: MapGeohashCont
         clearTimeout(pressTimer);
         pressTimer = null;
       }
-    };
-
-    const handleTouchMove = () => {
-      if (pressTimer) {
-        clearTimeout(pressTimer);
-        pressTimer = null;
-      }
+      // Reset pinch detection state
+      isPinching = false;
+      initialTouchDistance = null;
+      touchStartPosition = null;
     };
 
     mapContainer.addEventListener('touchstart', handleTouchStart as EventListener);
     mapContainer.addEventListener('touchend', handleTouchEnd as EventListener);
-    mapContainer.addEventListener('touchmove', handleTouchMove as EventListener);
+    mapContainer.addEventListener('touchmove', handleTouchMove as EventListener, { passive: true });
 
     return () => {
       mapContainer.removeEventListener('touchstart', handleTouchStart as EventListener);
       mapContainer.removeEventListener('touchend', handleTouchEnd as EventListener);
       mapContainer.removeEventListener('touchmove', handleTouchMove as EventListener);
     };
-  }, [isMobile, handleContextMenu]);
+  }, [isMobile, handleContextMenu, map]);
 
   const handleGeohashSelect = useCallback((precision: number) => {
     if (!clickLocation) return;

@@ -212,6 +212,29 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
   const mapRef = React.useRef<L.Map | null>(null);
 
+  // Prevent default context menu on mobile devices
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const mapContainer = map.getContainer();
+
+    const preventContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // Add context menu prevention for mobile devices
+    if ('ontouchstart' in window) {
+      mapContainer.addEventListener('contextmenu', preventContextMenu);
+    }
+
+    return () => {
+      if ('ontouchstart' in window) {
+        mapContainer.removeEventListener('contextmenu', preventContextMenu);
+      }
+    };
+  }, []);
+
   // Apply enhanced spam filtering based on user preference
   const filteredEvents = useMemo(() => {
     if (!events || events.length === 0) {
