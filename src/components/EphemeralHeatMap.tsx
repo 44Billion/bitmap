@@ -4,8 +4,10 @@ import { decode, decode_bbox } from 'ngeohash';
 import type { LatLngExpression } from 'leaflet';
 import L from 'leaflet';
 import { useEphemeralEvents, type EphemeralEventData } from '@/hooks/useEphemeralEvents';
-import { AlertTriangle, Activity, MapPin, User, Plus, Minus, MessageSquare, Navigation } from 'lucide-react';
-import { cn, truncateNickname } from '@/lib/utils';
+import { AlertTriangle, Activity, MapPin, User, Plus, Minus, MessageSquare, Flower, Swords } from 'lucide-react';
+import { cn, truncateNickname, filterMessages } from '@/lib/utils';
+import type { EphemeralEventMessage } from '@/hooks/useChatSession';
+import { useSpamFilter } from '@/contexts/SpamFilterContext';
 import { ChatDialog } from '@/components/chat/ChatDialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/useToast';
@@ -197,6 +199,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const { data: events, isLoading, error } = useEphemeralEvents();
   const [mapCenter, setMapCenter] = useState<LatLngExpression>([40.7128, -74.0060]); // Default to NYC
   const [highlightedGeohash, setHighlightedGeohash] = useState<string | null>(null);
+  const { spamFilterEnabled, toggleSpamFilter } = useSpamFilter();
   const { toast } = useToast();
   const [chatDialog, setChatDialog] = useState<{
     isOpen: boolean;
@@ -208,14 +211,41 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
   const mapRef = React.useRef<L.Map | null>(null);
 
-  // Process events into heat map points
+  // Apply enhanced spam filtering based on user preference
+  const filteredEvents = useMemo(() => {
+    if (!events || events.length === 0) {
+      return [];
+    }
+
+    // If spam filtering is disabled, return all events
+    if (!spamFilterEnabled) {
+      return events;
+    }
+
+    // Convert to EphemeralEventMessage format for filtering
+    const eventMessages: EphemeralEventMessage[] = events.map(event => ({
+      event: event.event,
+      message: event.message
+    }));
+
+    // Apply filtering
+    const filteredEventMessages = filterMessages(eventMessages);
+
+    // Convert back to EphemeralEventData format
+    return filteredEventMessages.map(filteredMsg =>
+      events.find(event => event.event.id === filteredMsg.event.id)!
+    ).filter(Boolean);
+  }, [events, spamFilterEnabled]);
+
+  // Process filtered events into heat map points
   const heatMapPoints = useMemo(() => {
+    if (!filteredEvents || filteredEvents.length === 0) return [];
     if (!events || events.length === 0) return [];
 
     // Group events by geohash to create intensity clusters
     const geohashGroups = new Map<string, EphemeralEventData[]>();
 
-    events.forEach(event => {
+    filteredEvents.forEach(event => {
       if (!event.geohash) return;
 
       // Use first 6 characters of geohash for clustering (roughly 1.2km precision)
@@ -245,12 +275,12 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     });
 
     // Auto-center map on first event if available
-    if (points.length > 0 && events.length > 0) {
+    if (points.length > 0 && filteredEvents.length > 0) {
       setMapCenter([points[0].lat, points[0].lng]);
     }
 
     return points;
-  }, [events]);
+  }, [filteredEvents, events]);
 
   // Calculate intensity colors (hacker green to red scale)
   const getIntensityColor = (intensity: number, maxIntensity: number) => {
@@ -414,15 +444,40 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       {/* Custom zoom controls */}
       <CustomZoomControls mapRef={mapRef} />
 
-      {/* Status indicator with event count */}
-      <div className="absolute top-4 right-4 bg-black/80 border border-green-500/30 rounded-lg p-2 font-mono text-xs z-10">
-        <div className="flex items-center gap-2 text-green-400">
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-          <span>LIVE - {events?.length || 0} EVENTS</span>
+      {/* Status indicator */}
+      <div className="absolute top-4 right-4 flex gap-1 z-10">
+        <div className="bg-black/80 border border-green-500/30 rounded-lg p-2 font-mono text-xs z-10">
+          <div className="flex items-center gap-2 text-green-400">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+            <span>LIVE - {filteredEvents?.length || 0} EVENTS</span>
+          </div>
         </div>
+
+        {/* Spam filter toggle - separate box to the right */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleSpamFilter}
+          className={`bg-black/80 border rounded-lg font-mono text-xs z-10 transition-colors p-2 ${
+            spamFilterEnabled
+              ? 'border-green-400/30 hover:bg-green-500/20'
+              : 'border-orange-400/30 hover:bg-orange-500/20'
+          }`}
+          title={spamFilterEnabled ? "Spam filtering: ON (click to disable)" : "Spam filtering: OFF (click to enable)"}
+        >
+          {spamFilterEnabled ? (
+            <Flower className="h-3 w-3 text-green-400" />
+          ) : (
+            <Swords className="h-3 w-3 text-orange-400" />
+          )}
+          <span className="sr-only">
+            {spamFilterEnabled ? "Spam filtering enabled" : "Spam filtering disabled"}
+          </span>
+        </Button>
       </div>
+
       {/* Button container */}
-      <div className="absolute top-14 sm:top-16 right-4 flex gap-2 z-10">
+      <div className="absolute top-14 right-4 flex gap-1 z-10">
         {/* Teleport button */}
         <Button
           onClick={handleOpenTeleport}
@@ -430,7 +485,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
           className="bg-black/80 border border-cyan-500/30 rounded-lg py-0 px-2 font-mono text-xs"
         >
             <div className="flex items-center gap-2 text-cyan-400">
-              <Navigation className="h-3 w-3 animate-pulse transform -mt-[.1rem] scale-75" />
+              <MapPin className="h-3 w-3 animate-pulse transform -mt-[.1rem] scale-75" />
               <span>TELEPORT</span>
             </div>
         </Button>
@@ -439,9 +494,9 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         <Button
           onClick={() => setIsLoginDialogOpen(true)}
           size="sm"
-          className="bg-black/80 border border-orange-400/50 rounded-lg py-0 px-2 font-mono text-xs"
+          className="bg-black/80 border border-yellow-400/30 hover:bg-yellow-500/20 rounded-lg py-0 px-2 font-mono text-xs"
         >
-            <User className="h-3 w-3 text-orange-400" />
+            <User className="h-3 w-3 text-yellow-400" />
         </Button>
       </div>
 
@@ -457,7 +512,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         <DialogContent className="max-w-md bg-black border border-green-500/30">
           <DialogHeader className="border-b border-green-500/20 pb-4">
             <DialogTitle className="flex items-center gap-2 text-green-400 font-mono">
-              <Navigation className="h-5 w-5" />
+              <MapPin className="h-5 w-5" />
               TELEPORT TO GEOHASH
             </DialogTitle>
           </DialogHeader>

@@ -263,7 +263,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
           </div>
           <div className="flex items-center gap-4 text-xs text-gray-400 font-mono">
             <div className="flex items-center gap-1">
-              <UserIcon className="h-3 w-3 text-orange-400" />
+              <UserIcon className="h-3 w-3 text-yellow-400" />
               {currentUser ? (
                 isEphemeralUser ? (
                   identity && (isEditingNickname ? (
@@ -297,7 +297,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
                   ) : (
                     <button
                       onClick={handleStartEditNickname}
-                      className="text-orange-300 hover:text-orange-200 transition-colors flex items-center gap-1"
+                      className="text-yellow-300 hover:text-yellow-200 transition-colors flex items-center gap-1"
                     >
                       Ephemeral: {identity.nickname}
                       <Edit2 className="h-3 w-3" />
@@ -340,7 +340,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
                 ) : (
                   <button
                     onClick={handleStartEditNickname}
-                    className="text-orange-300 hover:text-orange-200 transition-colors flex items-center gap-1"
+                    className="text-yellow-300 hover:text-yellow-200 transition-colors flex items-center gap-1"
                   >
                     Ephemeral: {identity.nickname}
                     <Edit2 className="h-3 w-3" />
@@ -379,7 +379,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
                   {isEphemeralUser ? (
                     <Button
                       onClick={clearEphemeralIdentity}
-                      className="w-full border-orange-500/30 text-orange-400 hover:bg-orange-500/10 font-mono text-xs py-3"
+                      className="w-full border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 font-mono text-xs py-3"
                     >
                       <X className="w-3 h-3 mr-2" />
                       [CLEAR IDENTITY]
@@ -511,7 +511,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
                 <div className="pt-4">
                   <Button
                     onClick={clearEphemeralIdentityOnly}
-                    className="w-full border-orange-500/30 text-orange-400 hover:bg-orange-500/10 font-mono text-xs py-3"
+                    className="w-full border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 font-mono text-xs py-3"
                   >
                     <X className="w-3 h-3 mr-2" />
                     [CLEAR IDENTITY]
@@ -526,7 +526,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
                   </div>
                   <Button
                     onClick={handleGenerateEphemeral}
-                    className="w-full border-orange-500/30 text-orange-400 hover:bg-orange-500/10 font-mono text-xs py-3"
+                    className="w-full border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 font-mono text-xs py-3"
                   >
                     <UserIcon className="w-3 h-3 mr-2" />
                     [GENERATE NEW IDENTITY]

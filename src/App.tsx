@@ -11,6 +11,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { NostrLoginProvider } from '@nostrify/react/login';
 import { AppProvider } from '@/components/AppProvider';
 import { NWCProvider } from '@/contexts/NWCContext';
+import { SpamFilterProvider } from '@/contexts/SpamFilterContext';
 import { AppConfig } from '@/contexts/AppContext';
 import AppRouter from './AppRouter';
 
@@ -51,12 +52,14 @@ export function App() {
           <NostrLoginProvider storageKey='nostr:login'>
             <NostrProvider>
               <NWCProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <Suspense>
-                    <AppRouter />
-                  </Suspense>
-                </TooltipProvider>
+                <SpamFilterProvider>
+                  <TooltipProvider>
+                    <Toaster />
+                    <Suspense>
+                      <AppRouter />
+                    </Suspense>
+                  </TooltipProvider>
+                </SpamFilterProvider>
               </NWCProvider>
             </NostrProvider>
           </NostrLoginProvider>

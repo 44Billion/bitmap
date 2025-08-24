@@ -10,6 +10,7 @@ import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/hooks/useToast';
 import { filterMessages, isLikelySpam, truncateNickname } from '@/lib/utils';
+import { useSpamFilter } from '@/contexts/SpamFilterContext';
 
 import type { EphemeralEventMessage } from '@/hooks/useChatSession';
 
@@ -23,7 +24,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   const [message, setMessage] = useState('');
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
-  const [hideSpam, setHideSpam] = useState(true); // Default to hiding spam
+  const { spamFilterEnabled, toggleSpamFilter } = useSpamFilter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -210,21 +211,21 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setHideSpam(!hideSpam)}
+                onClick={toggleSpamFilter}
                 className={`h-6 w-6 p-0 ${
-                  hideSpam
+                  spamFilterEnabled
                     ? "text-green-400 hover:text-green-300 hover:bg-green-500/10"
                     : "text-orange-400 hover:text-orange-300 hover:bg-orange-500/10"
                 }`}
-                title={hideSpam ? "Spam filtering: ON (click to disable)" : "Spam filtering: OFF (click to enable)"}
+                title={spamFilterEnabled ? "Spam filtering: ON (click to disable)" : "Spam filtering: OFF (click to enable)"}
               >
-                {hideSpam ? (
+                {spamFilterEnabled ? (
                   <Flower className="h-3 w-3" />
                 ) : (
                   <Swords className="h-3 w-3" />
                 )}
                 <span className="sr-only">
-                  {hideSpam ? "Spam filtering enabled" : "Spam filtering disabled"}
+                  {spamFilterEnabled ? "Spam filtering enabled" : "Spam filtering disabled"}
                 </span>
               </Button>
               <DialogClose asChild>
@@ -239,7 +240,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
               </DialogClose>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs text-gray-400 font-mono">
+          <div className="flex items-center gap-4 text-xs text-cyan-400 font-mono">
             <div className="flex items-center gap-1">
               <MapPin className="h-3 w-3" />
               <span className="hidden sm:flex">Geohash: {geohash}</span>
@@ -281,10 +282,10 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                 </div>
               ) : (
                 <>
-                  <UserIcon className="h-3 w-3 text-orange-400" />
+                  <UserIcon className="h-3 w-3 text-yellow-400" />
                   <button
                     onClick={handleStartEditNickname}
-                    className="text-orange-300 hover:text-orange-200 transition-colors flex items-center gap-1"
+                    className="text-yellow-300 hover:text-yellow-200 transition-colors flex items-center gap-1"
                   >
                     {session ? `Ephemeral: ${session.nickname}` : 'Connecting...'}
                     <Edit2 className="h-3 w-3" />
@@ -311,7 +312,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                 </div>
               ) : (() => {
                 // Apply unified filtering (spam + deduplication)
-                const displayMessages = hideSpam ? filterMessages(chatMessages) : chatMessages;
+                const displayMessages = spamFilterEnabled ? filterMessages(chatMessages) : chatMessages;
 
                 // Calculate counts for status display
                 const totalRemoved = chatMessages.length - displayMessages.length;
