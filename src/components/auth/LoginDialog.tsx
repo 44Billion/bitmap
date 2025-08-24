@@ -11,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLoginActions } from '@/hooks/useLoginActions';
 import { useEphemeralIdentity } from '@/hooks/useEphemeralIdentity';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
 
 interface LoginDialogProps {
   isOpen: boolean;
@@ -38,7 +40,9 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
   }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const login = useLoginActions();
-  const { identity, updateNickname, generateIdentity } = useEphemeralIdentity();
+  const { identity, updateNickname, generateIdentity, clearIdentity } = useEphemeralIdentity();
+  const { user } = useCurrentUser();
+  const { currentUser, removeLogin } = useLoggedInAccounts();
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
   const [ephemeralKeySecured, setEphemeralKeySecured] = useState<'none' | 'copied' | 'downloaded'>('none');
@@ -116,6 +120,38 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
     if (newIdentity) {
       setEphemeralKeySecured('none');
     }
+  };
+
+  // Check if current user is using ephemeral identity vs regular login
+  const isEphemeralUser = !user && currentUser;
+
+  // Clear ephemeral identity function
+  const clearEphemeralIdentity = () => {
+    // Remove the current login
+    if (currentUser) {
+      removeLogin(currentUser.id);
+    }
+    // Clear the identity using the hook's clearIdentity function
+    clearIdentity();
+    // Close the dialog
+    onClose();
+  };
+
+  // Clear ephemeral identity without login (for when identity exists but currentUser doesn't)
+  const clearEphemeralIdentityOnly = () => {
+    // Clear the identity using the hook's clearIdentity function
+    clearIdentity();
+    // Close the dialog
+    onClose();
+  };
+
+  // Logout function for regular users
+  const handleLogout = () => {
+    if (currentUser) {
+      removeLogin(currentUser.id);
+    }
+    // Close the dialog
+    onClose();
   };
 
   const handleExtensionLogin = async () => {
@@ -228,7 +264,51 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
           <div className="flex items-center gap-4 text-xs text-gray-400 font-mono">
             <div className="flex items-center gap-1">
               <UserIcon className="h-3 w-3 text-orange-400" />
-              {identity ? (
+              {currentUser ? (
+                isEphemeralUser ? (
+                  identity && (isEditingNickname ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={newNickname}
+                        onChange={(e) => setNewNickname(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') handleSaveNickname();
+                          if (e.key === 'Escape') handleCancelEditNickname();
+                        }}
+                        placeholder="New nickname..."
+                        className="h-6 text-xs bg-black/50 border-green-500/30 text-green-400 placeholder:text-green-500/50 font-mono w-32"
+                        autoFocus
+                      />
+                      <Button
+                        onClick={handleSaveNickname}
+                        size="sm"
+                        className="h-6 w-6 bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-400 p-0"
+                      >
+                        ✓
+                      </Button>
+                      <Button
+                        onClick={handleCancelEditNickname}
+                        size="sm"
+                        className="h-6 w-6 bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-400 p-0"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleStartEditNickname}
+                      className="text-orange-300 hover:text-orange-200 transition-colors flex items-center gap-1"
+                    >
+                      Ephemeral: {identity.nickname}
+                      <Edit2 className="h-3 w-3" />
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-blue-300">
+                    {currentUser.metadata.name || currentUser.pubkey.slice(0, 8)}...
+                  </span>
+                )
+              ) : identity ? (
                 isEditingNickname ? (
                   <div className="flex items-center gap-1">
                     <Input
@@ -267,7 +347,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
                   </button>
                 )
               ) : (
-                <span className="text-gray-500">No ephemeral identity</span>
+                <span className="text-gray-500">No identity</span>
               )}
             </div>
           </div>
@@ -280,7 +360,55 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
             <span>Identity management terminal active.</span>
           </div>
 
-          {identity ? (
+          {/* Show current user status and actions */}
+          {currentUser ? (
+            <>
+              {/* User is logged in - show identity info and action button */}
+              <div className="space-y-4">
+                <div className="text-cyan-400 py-2 w-full font-mono text-xs leading-relaxed">
+                  <span>[STATUS] </span>
+                  {isEphemeralUser ? (
+                    <span>Ephemeral identity active: {currentUser.metadata.name || currentUser.pubkey.slice(0, 8)}...</span>
+                  ) : (
+                    <span>Authenticated as: {currentUser.metadata.name || currentUser.pubkey.slice(0, 8)}...</span>
+                  )}
+                </div>
+
+                {/* Action button */}
+                <div className="pt-2">
+                  {isEphemeralUser ? (
+                    <Button
+                      onClick={clearEphemeralIdentity}
+                      className="w-full border-orange-500/30 text-orange-400 hover:bg-orange-500/10 font-mono text-xs py-3"
+                    >
+                      <X className="w-3 h-3 mr-2" />
+                      [CLEAR IDENTITY]
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleLogout}
+                      className="w-full border-red-500/30 text-red-400 hover:bg-red-500/10 font-mono text-xs py-3"
+                    >
+                      <X className="w-3 h-3 mr-2" />
+                      [LOG OUT]
+                    </Button>
+                  )}
+                </div>
+
+                {/* Additional options */}
+                <div className="pt-4 border-t border-green-500/20">
+                  <div className="text-gray-500 py-2 w-full font-mono text-xs leading-relaxed">
+                    <span>[INFO] </span>
+                    {isEphemeralUser ? (
+                      <span>Clearing identity will remove your ephemeral session and generated keys.</span>
+                    ) : (
+                      <span>Logging out will end your authenticated session.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : identity ? (
             <>
               {/* Ephemeral identity exists */}
               <div className="space-y-4">
@@ -379,6 +507,17 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
                   </Card>
                 </div>
 
+                {/* Clear identity button */}
+                <div className="pt-4">
+                  <Button
+                    onClick={clearEphemeralIdentityOnly}
+                    className="w-full border-orange-500/30 text-orange-400 hover:bg-orange-500/10 font-mono text-xs py-3"
+                  >
+                    <X className="w-3 h-3 mr-2" />
+                    [CLEAR IDENTITY]
+                  </Button>
+                </div>
+
                 {/* Generate new identity */}
                 <div className="pt-4 border-t border-green-500/20">
                   <div className="text-gray-500 py-2 w-full font-mono text-xs mb-3">
@@ -397,7 +536,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, _on
             </>
           ) : (
             <>
-              {/* No ephemeral identity */}
+              {/* No identity - show generate ephemeral and login options */}
               <div className="space-y-4">
                 <div className="text-green-500 py-2 w-full font-mono text-xs">
                   <span>[INFO] </span>

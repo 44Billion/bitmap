@@ -31,6 +31,7 @@ export interface UseEphemeralIdentityReturn {
   identity: EphemeralIdentity | null;
   generateIdentity: () => EphemeralIdentity;
   updateNickname: (nickname: string) => void;
+  clearIdentity: () => void;
 }
 
 export function useEphemeralIdentity(): UseEphemeralIdentityReturn {
@@ -87,12 +88,20 @@ export function useEphemeralIdentity(): UseEphemeralIdentityReturn {
     }
   }, [identity]);
 
+  const clearIdentity = useCallback(() => {
+    // Clear identity state
+    setIdentity(null);
+    // Remove nickname from localStorage
+    localStorage.removeItem('ephemeral-nickname');
+  }, []);
+
   // Generate identity on first use
   if (!identity) {
     return {
       identity: null,
       generateIdentity,
       updateNickname,
+      clearIdentity,
     };
   }
 
@@ -100,5 +109,6 @@ export function useEphemeralIdentity(): UseEphemeralIdentityReturn {
     identity,
     generateIdentity,
     updateNickname,
+    clearIdentity,
   };
 }
