@@ -179,7 +179,6 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
     const defaultRelays = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
 
     try {
-      console.log('🎯 CHAT SEND MODE: Finding closest relays for geohash:', targetGeohash);
       const geoRelays = await fetchGeoRelays();
       const { latitude, longitude } = decode(targetGeohash);
       const closestRelays = findClosestRelays(geoRelays, latitude, longitude, 5);
@@ -189,10 +188,6 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
       closestRelays.forEach(relay => allRelays.add(relay.url));
 
       const relayUrls = Array.from(allRelays);
-      console.log('✅ Chat relay selection: Default (3) + Closest (', closestRelays.length, ') = Total (', relayUrls.length, ') relays');
-      console.log('🌟 Default relays:', defaultRelays);
-      console.log('📍 Closest relays:', closestRelays.map(r => r.url));
-
       return relayUrls;
     } catch (error) {
       console.error('❌ Failed to fetch geo relays for chat send, using default relays only:', error);

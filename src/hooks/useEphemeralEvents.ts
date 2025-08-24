@@ -49,20 +49,16 @@ export function useEphemeralEvents(targetGeohash?: string) {
 
       if (targetGeohash) {
         // CHAT MODE: Find closest relays for chat
-        console.log('🎯 CHAT MODE: Finding closest relays for geohash:', targetGeohash);
         try {
           const geoRelays = await fetchGeoRelays();
           const { latitude, longitude } = decode(targetGeohash);
           const closestRelays = findClosestRelays(geoRelays, latitude, longitude, 8); // Use 8 closest relays for better coverage
           const closestRelayUrls = closestRelays.map(relay => relay.url);
           const enabledClosestRelays = getEnabledRelays(closestRelayUrls);
-          console.log('✅ Selected closest relays for chat:', enabledClosestRelays);
 
           if (enabledClosestRelays.length === 0) {
-            console.warn('⚠️ No closest relays enabled - trying default relays');
             const fallbackRelays = getEnabledRelays(['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net']);
             if (fallbackRelays.length === 0) {
-              console.warn('⚠️ No relays available at all for chat');
               return [];
             }
             const events = await nostr.query([{ kinds: [20000], limit: 500 }], { signal, relays: fallbackRelays });
@@ -76,16 +72,12 @@ export function useEphemeralEvents(targetGeohash?: string) {
           console.error('❌ Failed to fetch geo relays for chat, using defaults:', error);
           const fallbackRelays = getEnabledRelays(['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net']);
           if (fallbackRelays.length === 0) {
-            console.warn('⚠️ No fallback relays available');
             return [];
           }
           const events = await nostr.query([{ kinds: [20000], limit: 500 }], { signal, relays: fallbackRelays });
           return events.filter(validateEphemeralEvent).map(transformEphemeralEvent);
         }
       }
-
-      // MAP MODE: Sophisticated progressive loading with relay rotation
-      console.log('🗺️  MAP MODE: Progressive loading with intelligent relay rotation');
 
       const allDefaultRelays = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
       const enabledDefaultRelays = getEnabledRelays(allDefaultRelays);
@@ -94,9 +86,6 @@ export function useEphemeralEvents(targetGeohash?: string) {
 
       // Phase 1: Quick load from default relays (render map ASAP)
       try {
-        console.log('🌟 Phase 1: Loading from default relays for initial render...');
-        console.log('📡 Enabled default relays:', enabledDefaultRelays);
-
         if (enabledDefaultRelays.length === 0) {
           console.warn('⚠️ No default relays enabled - skipping Phase 1');
         } else {
@@ -106,13 +95,6 @@ export function useEphemeralEvents(targetGeohash?: string) {
           });
 
           allEvents.push(...defaultEvents);
-          console.log('✅ Phase 1 complete:', defaultEvents.length, 'events from default relays');
-        }
-
-        // Log initial results for debugging
-        const initialResults = allEvents.filter(validateEphemeralEvent).map(transformEphemeralEvent);
-        if (initialResults.length > 0) {
-          console.log('🚀 Initial map render ready with', initialResults.length, 'events');
         }
       } catch (error) {
         console.error('❌ Phase 1 failed:', error);
