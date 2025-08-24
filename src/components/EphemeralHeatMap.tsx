@@ -4,7 +4,7 @@ import { decode, decode_bbox } from 'ngeohash';
 import type { LatLngExpression } from 'leaflet';
 import L from 'leaflet';
 import { useEphemeralEvents, type EphemeralEventData } from '@/hooks/useEphemeralEvents';
-import { AlertTriangle, Activity, MapPin, User, Plus, Minus, MessageSquare, Flower, Swords } from 'lucide-react';
+import { AlertTriangle, Activity, MapPin, User, Plus, Minus, MessageSquare, Flower, Swords, List } from 'lucide-react';
 import { cn, truncateNickname, filterMessages } from '@/lib/utils';
 import type { EphemeralEventMessage } from '@/hooks/useChatSession';
 import { useSpamFilter } from '@/contexts/SpamFilterContext';
@@ -16,6 +16,7 @@ import LoginDialog from '@/components/auth/LoginDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { MapGeohashContextMenu, MapGeohashContextMenuHandler } from '@/components/MapGeohashContextMenu';
+import { RelayListModal } from '@/components/RelayListModal';
 
 interface HeatMapPoint {
   lat: number;
@@ -214,6 +215,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const [isTeleportOpen, setIsTeleportOpen] = useState(false);
   const [teleportGeohash, setTeleportGeohash] = useState('');
   const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const [isRelayListModalOpen, setIsRelayListModalOpen] = useState(false);
   const mapRef = React.useRef<L.Map | null>(null);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
@@ -565,6 +567,18 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         </Button>
       </div>
 
+      {/* Secondary button container - below profile */}
+      <div className="absolute top-[76px] right-4 z-10">
+        {/* Relay list button */}
+        <Button
+          onClick={() => setIsRelayListModalOpen(true)}
+          size="sm"
+          className="bg-black/80 border border-purple-500/30 hover:bg-purple-500/20 rounded-lg py-0 px-2 font-mono text-xs"
+        >
+            <List className="h-3 w-3 text-purple-400" />
+        </Button>
+      </div>
+
       {/* Chat Dialog */}
       <ChatDialog
         isOpen={chatDialog.isOpen}
@@ -625,6 +639,12 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         isOpen={isLoginDialogOpen}
         onClose={() => setIsLoginDialogOpen(false)}
         onLogin={() => setIsLoginDialogOpen(false)}
+      />
+
+      {/* Relay List Modal */}
+      <RelayListModal
+        isOpen={isRelayListModalOpen}
+        onOpenChange={setIsRelayListModalOpen}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 import type { GeoRelay } from './georelays';
 
-interface Region {
+export interface Region {
   name: string;
   bounds: {
     minLat: number;
