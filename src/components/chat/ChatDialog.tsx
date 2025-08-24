@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2, X, Swords, Flower, ChevronDown } from 'lucide-react';
+import { Send, MapPin, Activity, User as UserIcon, Edit2, X, Swords, Flower, ChevronDown, UserRoundCheck } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/hooks/useToast';
@@ -249,8 +249,8 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
             <div className="flex items-center gap-1">
               {user ? (
                 <>
-                  <Shield className="h-3 w-3 text-blue-400" />
-                  <span className="text-blue-300">Logged in as {metadata?.name || 'user'}</span>
+                  <UserRoundCheck className="h-3 w-3 text-blue-400" />
+                  <span className="text-blue-300">{metadata?.name || 'user'}</span>
                 </>
               ) : isEditingNickname ? (
                 <div className="flex items-center gap-1">
