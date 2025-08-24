@@ -9,7 +9,7 @@ import { Send, MapPin, Activity, Shield, User as UserIcon, Edit2, X, Swords, Flo
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/hooks/useToast';
-import { isLikelySpam, truncateNickname } from '@/lib/utils';
+import { filterMessages, isLikelySpam, truncateNickname } from '@/lib/utils';
 
 import type { EphemeralEventMessage } from '@/hooks/useChatSession';
 
@@ -310,21 +310,44 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                   <span className="whitespace-pre-wrap break-all overflow-wrap-anywhere">No messages in channel. Be the first to transmit.</span>
                 </div>
               ) : (() => {
-                const filteredMessages = chatMessages.filter(msg => !hideSpam || !isLikelySpam(msg));
-                const spamMessagesCount = chatMessages.filter(msg => isLikelySpam(msg)).length;
+                // Apply unified filtering (spam + deduplication)
+                const displayMessages = hideSpam ? filterMessages(chatMessages) : chatMessages;
+
+                // Calculate counts for status display
+                const totalRemoved = chatMessages.length - displayMessages.length;
+                const spamCount = chatMessages.filter(msg => isLikelySpam(msg)).length;
+                const duplicateCount = totalRemoved - spamCount;
 
                 return (
                   <>
-                    {/* Show spam filter status message */}
-                    {hideSpam && spamMessagesCount > 0 && (
+                    {/* Show filtering status messages */}
+                    {totalRemoved > 0 && (
                       <div className="text-gray-500/50 py-1 w-full text-xs">
-                        <span className="text-green-500/30">🌸 </span>
-                        <span className="text-gray-500/40">
-                          {spamMessagesCount} filtered
-                        </span>
+                        {spamCount > 0 && duplicateCount > 0 ? (
+                          <>
+                            <span className="text-green-500/30">🌸 </span>
+                            <span className="text-gray-500/40">
+                              {spamCount} spam, {duplicateCount} duplicates removed
+                            </span>
+                          </>
+                        ) : spamCount > 0 ? (
+                          <>
+                            <span className="text-green-500/30">🌸 </span>
+                            <span className="text-gray-500/40">
+                              {spamCount} filtered
+                            </span>
+                          </>
+                        ) : duplicateCount > 0 ? (
+                          <>
+                            <span className="text-blue-500/30">🌸 </span>
+                            <span className="text-gray-500/40">
+                              {duplicateCount} duplicates removed
+                            </span>
+                          </>
+                        ) : null}
                       </div>
                     )}
-                    {filteredMessages.map((msg) => {
+                    {displayMessages.map((msg) => {
                       const isOwn = user?.pubkey === msg.event.pubkey;
                       const authorNickname = msg.nickname || 'anonymous';
                       const timestamp = new Date(msg.event.created_at * 1000).toLocaleTimeString('en-US', {
