@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { List, X, Wifi, Globe, MapPin, Loader2, RefreshCw, WifiOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ interface RegionalRelayGroup {
 }
 
 export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
-  const { config, presetRelays = [] } = useAppContext();
+  const { presetRelays = [] } = useAppContext();
   const {
   disabledRelays,
   toggleRelay,
@@ -33,17 +33,18 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
   const [regionalGroups, setRegionalGroups] = useState<RegionalRelayGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
-  // Load geo relays when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      loadGeoRelays();
-    }
-  }, [isOpen]);
-
-  const loadGeoRelays = async () => {
+  const loadGeoRelays = useCallback(async () => {
     try {
-      setIsLoading(true);
+      // Only show loading state if this is the first load or explicit refresh
+      if (!hasLoadedOnce || isRefreshing) {
+        setIsLoading(true);
+      }
+
+      // Add a small delay to allow UI to update before heavy processing
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       const relays = await fetchGeoRelays();
       setGeoRelays(relays);
 
@@ -62,37 +63,27 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
       });
 
       setRegionalGroups(groups);
+      setHasLoadedOnce(true);
     } catch (error) {
       console.error('Failed to load geo relays:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isRelayDisabled, hasLoadedOnce, isRefreshing]);
+
+  // Load geo relays when modal opens
+  useEffect(() => {
+    if (isOpen && !hasLoadedOnce) {
+      loadGeoRelays();
+    }
+  }, [isOpen, loadGeoRelays, hasLoadedOnce]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    setHasLoadedOnce(false); // Force reload
     await loadGeoRelays();
     setIsRefreshing(false);
   };
-
-  const _getRelayStatusColor = (relayUrl: string) => {
-    // Check if relay is disabled
-    if (isRelayDisabled(relayUrl)) {
-      return 'text-red-400';
-    }
-    // Check if this is the currently selected default relay
-    if (relayUrl === config.relayUrl) {
-      return 'text-green-400';
-    }
-    return 'text-gray-400';
-  };
-
-  // const getRegionStatusIcon = (isActive: boolean) => {
-  //   if (isActive) {
-  //     return <Wifi className="h-3 w-3 text-green-400" />;
-  //   }
-  //   return <div className="h-3 w-3 rounded-full bg-gray-600" />;
-  // };
 
   const getEnabledRelaysInRegion = (regionRelays: GeoRelay[]) => {
     return regionRelays.filter(relay => !isRelayDisabled(relay.url));
@@ -206,9 +197,35 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
             </div>
 
             {isLoading ? (
-              <div className="flex items-center justify-center py-4 sm:py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-green-400" />
-                <span className="ml-2 text-green-400 font-mono text-sm">LOADING REGIONAL RELAYS...</span>
+              <div className="space-y-3">
+                {/* Skeleton loading for regions */}
+                {REGIONS.slice(0, 3).map((region, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center gap-2 py-2">
+                      <div className="w-4 h-4 bg-gray-700 rounded animate-pulse"></div>
+                      <div className="h-4 w-32 bg-gray-700 rounded animate-pulse"></div>
+                      <div className="h-5 w-12 bg-gray-700 rounded animate-pulse"></div>
+                    </div>
+                    <div className="ml-6 space-y-1">
+                      {[1, 2].map((i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-gray-900/20 border border-gray-700/30 rounded p-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-3 h-3 bg-gray-700 rounded animate-pulse"></div>
+                            <div className="h-3 w-24 bg-gray-700 rounded animate-pulse flex-1"></div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="h-3 w-16 bg-gray-700 rounded animate-pulse"></div>
+                            <div className="h-5 w-8 bg-gray-700 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-center py-4 text-green-400 font-mono text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  LOADING REGIONAL RELAYS...
+                </div>
               </div>
             ) : (
               <div className="space-y-1">

@@ -543,7 +543,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       <div className="absolute top-4 right-4 flex gap-1 z-10">
         <div className="bg-black/80 border border-green-500/30 rounded-lg p-2 font-mono text-xs z-10">
           <div className="flex items-center gap-2 text-green-400">
-            <div className="w-2 h-2 rounded-full nimate-pulse bg-green-400"></div>
+            <div className="w-2 h-2 rounded-full animate-pulse bg-green-400"></div>
             <span>
               {globalFetching && !initialLoadComplete ? 'LOADING' : 'LIVE'} - {filteredGlobalEvents?.length || 0} EVENTS
             </span>

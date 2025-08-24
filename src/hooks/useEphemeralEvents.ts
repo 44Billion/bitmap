@@ -3,7 +3,6 @@ import { useNostr } from '@nostrify/react';
 import type { NostrEvent } from '@nostrify/nostrify';
 import { truncateNickname } from '@/lib/utils';
 import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
-// Removed unused relay coverage imports for simplified relay management
 import { decode } from 'ngeohash';
 import { useDisabledRelays } from '@/hooks/useDisabledRelays';
 

@@ -24,32 +24,58 @@ export async function fetchGeoRelays(): Promise<GeoRelay[]> {
   try {
     console.log('Fetching geo relays from CSV...');
     geoRelaysFetchPromise = (async () => {
-      const response = await fetch('https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv');
-      const csvText = await response.text();
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-      // Parse the CSV data
-      const relays: GeoRelay[] = [];
-      const lines = csvText.trim().split('\n');
+      try {
+        const response = await fetch('https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv', {
+          signal: controller.signal
+        });
 
-      for (const line of lines) {
-        // The format is: relayUrl,latitude,longitude
-        const parts = line.split(',');
-        if (parts.length >= 3) {
-          const url = parts[0].trim();
-          const latitude = parseFloat(parts[1]);
-          const longitude = parseFloat(parts[2]);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-          if (url && !isNaN(latitude) && !isNaN(longitude)) {
-            // Ensure URL has proper websocket protocol
-            const wsUrl = url.startsWith('wss://') ? url : `wss://${url}`;
-            relays.push({ url: wsUrl, latitude, longitude });
+        const csvText = await response.text();
+        clearTimeout(timeoutId);
+
+        // Parse the CSV data in chunks to avoid blocking
+        const relays: GeoRelay[] = [];
+        const lines = csvText.trim().split('\n');
+
+        // Process lines in smaller batches to avoid blocking
+        const batchSize = 100;
+        for (let i = 0; i < lines.length; i += batchSize) {
+          const batch = lines.slice(i, i + batchSize);
+
+          // Use setTimeout to yield to the UI thread
+          await new Promise(resolve => setTimeout(resolve, 0));
+
+          for (const line of batch) {
+            // The format is: relayUrl,latitude,longitude
+            const parts = line.split(',');
+            if (parts.length >= 3) {
+              const url = parts[0].trim();
+              const latitude = parseFloat(parts[1]);
+              const longitude = parseFloat(parts[2]);
+
+              if (url && !isNaN(latitude) && !isNaN(longitude)) {
+                // Ensure URL has proper websocket protocol
+                const wsUrl = url.startsWith('wss://') ? url : `wss://${url}`;
+                relays.push({ url: wsUrl, latitude, longitude });
+              }
+            }
           }
         }
-      }
 
-      console.log('Fetched and parsed', relays.length, 'geo relays');
-      geoRelaysCache = relays;
-      return relays;
+        console.log('Fetched and parsed', relays.length, 'geo relays');
+        geoRelaysCache = relays;
+        return relays;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+      }
     })();
 
     const result = await geoRelaysFetchPromise;
