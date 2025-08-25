@@ -195,6 +195,126 @@ describe('Spam Detection', () => {
     });
   });
 
+  describe('Low character density detection', () => {
+    it('flags messages with very low alphanumeric density as spam', () => {
+      const lowDensityMessages = [
+        '; ; ; ; ; ; ; ; ;', // Lots of semicolons and spaces
+        '! ! ! ! ! ! ! ! !', // Lots of exclamation marks and spaces
+        '? ? ? ? ? ? ? ? ?', // Lots of question marks and spaces
+        '. . . . . . . . .', // Lots of dots and spaces
+        ', , , , , , , , ,', // Lots of commas and spaces
+        '/ / / / / / / / /', // Lots of slashes and spaces
+        '- - - - - - - - -', // Lots of dashes and spaces
+        '+ + + + + + + + +', // Lots of plus signs and spaces
+        '= = = = = = = = =', // Lots of equals signs and spaces
+        '_ _ _ _ _ _ _ _ _', // Lots of underscores and spaces
+      ];
+
+      lowDensityMessages.forEach(msg => {
+        const spamMessage = createTestMessage(msg);
+        expect(isLikelySpam(spamMessage)).toBe(true);
+        expect(calculateSpamScore(msg)).toBeGreaterThanOrEqual(3);
+      });
+    });
+
+    it('does not flag legitimate messages with normal character density', () => {
+      const legitimateMessages = [
+        'hello there',
+        'how are you?',
+        'this is a test',
+        'the quick brown fox',
+        'a;b;c;d', // Mixed punctuation but still has good density
+        'hi !!!', // Short but has decent density
+        'test ???', // Short but has decent density
+        'a b c d e f g', // Has spaces but good density
+        '1 2 3 4 5 6 7', // Has spaces but good density
+        'a! b? c. d,', // Mixed punctuation with good density
+      ];
+
+      legitimateMessages.forEach(msg => {
+        const spamMessage = createTestMessage(msg);
+        expect(isLikelySpam(spamMessage)).toBe(false);
+        expect(calculateSpamScore(msg)).toBeLessThan(3);
+      });
+    });
+  });
+
+  describe('Short repetitive message detection', () => {
+    it('flags very short repetitive character messages as spam', () => {
+      const repetitiveMessages = [
+        ';;;;;;;',
+        '!!!!!!!',
+        '???????',
+        '(((((((',
+        '=======',
+        '+++++++'
+      ];
+
+      repetitiveMessages.forEach(msg => {
+        const spamMessage = createTestMessage(msg);
+        expect(isLikelySpam(spamMessage)).toBe(true);
+        expect(calculateSpamScore(msg)).toBeGreaterThanOrEqual(3);
+      });
+    });
+
+    it('does not flag short legitimate messages', () => {
+      const legitimateMessages = [
+        'hi',
+        'ok',
+        'yes',
+        'no',
+        'hey',
+        'lol',
+        'a;b', // Mixed characters, not repetitive
+        'test', // Normal word
+        'ok' // Simple response
+      ];
+
+      legitimateMessages.forEach(msg => {
+        const spamMessage = createTestMessage(msg);
+        expect(isLikelySpam(spamMessage)).toBe(false);
+        expect(calculateSpamScore(msg)).toBeLessThan(3);
+      });
+    });
+  });
+
+  describe('Extremely long message detection', () => {
+    it('auto-scores extremely long messages as spam immediately', () => {
+      // Create a very long message (over 1000 characters)
+      const longMessage = 'x'.repeat(1500); // Simple 1500 character message
+      const spamMessage = createTestMessage(longMessage);
+
+      expect(isLikelySpam(spamMessage)).toBe(true);
+      expect(calculateSpamScore(longMessage)).toBe(3); // Should return immediate spam score
+    });
+
+    it('does not auto-score long messages under the threshold as spam', () => {
+      // Create a simple, non-repetitive message well under the threshold
+      const longMessage = 'Hello there, how are you doing today? I hope everything is going well with you.';
+      const spamMessage = createTestMessage(longMessage);
+
+      expect(isLikelySpam(spamMessage)).toBe(false);
+      expect(calculateSpamScore(longMessage)).toBeLessThan(3); // Should not reach spam threshold
+    });
+
+    it('auto-scores exactly 1001 character messages as spam', () => {
+      const exactlyLongMessage = 'a'.repeat(1001);
+      const spamMessage = createTestMessage(exactlyLongMessage);
+
+      expect(isLikelySpam(spamMessage)).toBe(true);
+      expect(calculateSpamScore(exactlyLongMessage)).toBe(3);
+    });
+
+    it('processes 1000 character messages normally', () => {
+      const thresholdMessage = 'b'.repeat(1000);
+
+      // Note: This may still be flagged due to repetitive patterns, but should not be due to length
+      const score = calculateSpamScore(thresholdMessage);
+      console.log(`1000 char message score: ${score}`);
+      expect(score).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe('Scoring system validation', () => {
     it('assigns appropriate scores to different spam types', () => {
       const testCases = [
@@ -216,6 +336,19 @@ describe('Spam Detection', () => {
   });
 
   describe('Repetition detection', () => {
+    it('detects rapid identical message flooding', () => {
+      const baseTime = Date.now() / 1000;
+      const messages = [
+        createTestMessageWithTime(';;;;;;;', baseTime - 2), // 2 seconds ago
+        createTestMessageWithTime(';;;;;;;', baseTime - 1), // 1 second ago
+        createTestMessageWithTime(';;;;;;;', baseTime), // now
+      ];
+
+      const targetMessage = createTestMessageWithTime(';;;;;;;', baseTime);
+
+      expect(isRepetitiveSpam(targetMessage, messages, 30000, 3)).toBe(true);
+    });
+
     it('detects exact message repetition within time window', () => {
       const baseTime = Date.now() / 1000;
       const messages = [

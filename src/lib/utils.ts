@@ -104,6 +104,30 @@ export function filterMessages(messages: EphemeralEventMessage[]): EphemeralEven
 export function isLikelySpam(message: EphemeralEventMessage): boolean {
   const { message: content } = message;
 
+  // Immediate check for extremely long messages - auto-score as spam without further processing
+  if (content.length > 1000) {
+    return true;
+  }
+
+  // Special check for very short repetitive patterns like ";;;;;;;" or "!!!!!!!"
+  if (content.length <= 20) {
+    const repetitiveCharPattern = /^(.)\1{6,}$/; // Same character repeated 7+ times
+    if (repetitiveCharPattern.test(content.trim())) {
+      return true;
+    }
+  }
+
+  // Check for low character density (lots of spaces/punctuation with little actual content)
+  if (content.length > 3) {
+    const alphaNumericChars = content.replace(/[^a-zA-Z0-9]/g, '').length;
+    const density = alphaNumericChars / content.length;
+
+    // If less than 15% of characters are alphanumeric, it's likely spam
+    if (density < 0.15) {
+      return true;
+    }
+  }
+
   // Calculate spam score based on multiple factors
   const spamScore = calculateSpamScore(content);
 
@@ -135,6 +159,18 @@ export function isRepetitiveSpam(
   const exactMatches = recentUserMessages.filter(msg =>
     msg.message === content
   );
+
+  // Much more aggressive: flag ANY repeated identical message within short time windows
+  // For very rapid flooding (within 5 seconds), flag after just 1 repeat
+  const veryShortTimeWindow = 5000; // 5 seconds
+  const veryRecentExactMatches = recentUserMessages.filter(msg =>
+    msg.message === content &&
+    (currentTime - (msg.event.created_at * 1000)) <= veryShortTimeWindow
+  );
+
+  if (veryRecentExactMatches.length >= 1) { // Flag after just 1 repeat in 5 seconds
+    return true;
+  }
 
   // If there are too many exact matches in the time window, it's spam
   if (exactMatches.length >= maxRepeats - 1) { // -1 because we're checking against previous messages
@@ -384,24 +420,39 @@ export function isFloodSpam(
 export function calculateSpamScore(content: string): number {
   let score = 0;
 
-  if (content.length > 5000) {
-    return 1; // Minor penalty for very long content but don't process further
+  // Auto-score extremely long messages as spam immediately without further processing
+  if (content.length > 1000) {
+    return 3; // Immediate spam score for extremely long content
   }
 
   const lowerContent = content.toLowerCase();
 
-  // Basic validation - only penalize very short or extremely long messages
+  // Basic validation - penalize very short messages
   if (content.length < 2) {
     score += 2; // Strong penalty for very short messages
-  }
-  if (content.length > 1000) {
-    score += 1; // Minor penalty for extremely long messages
   }
 
   // 1. Repetitive patterns
   const repetitivePattern = /(.{3,})\1{2,}/.test(lowerContent);
   if (repetitivePattern) {
     score += 3; // Strong indicator of spam
+  }
+
+  // Special case: very short repetitive character patterns (like ";;;;;;;")
+  const shortRepetitiveCharPattern = /^(.)\1{6,}$/;
+  if (shortRepetitiveCharPattern.test(content.trim())) {
+    score += 3; // Immediate spam score for repetitive character flooding
+  }
+
+  // Low character density detection (lots of spaces/punctuation with little content)
+  if (content.length > 3) {
+    const alphaNumericChars = content.replace(/[^a-zA-Z0-9]/g, '').length;
+    const density = alphaNumericChars / content.length;
+
+    // If less than 15% of characters are alphanumeric, it's likely spam
+    if (density < 0.15) {
+      score += 3; // Immediate spam score for low character density
+    }
   }
 
   const longWordPattern = /\b\w{20,}\b/.test(lowerContent);
