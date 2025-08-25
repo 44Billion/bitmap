@@ -209,7 +209,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const showLoadingOverlay = globalLoading && !selectedGeohash;
   const [mapCenter, setMapCenter] = useState<LatLngExpression>([40.7128, -74.0060]); // Default to NYC
   const [highlightedGeohash, setHighlightedGeohash] = useState<string | null>(null);
-  const { spamFilterEnabled, toggleSpamFilter } = useSpamFilter();
+  const { spamFilterEnabled, toggleSpamFilter, blockedUsers } = useSpamFilter();
   const { toast } = useToast();
   const [chatDialog, setChatDialog] = useState<{
     isOpen: boolean;
@@ -271,13 +271,13 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     }));
 
     // Apply filtering
-    const filteredEventMessages = filterMessages(eventMessages);
+    const filteredEventMessages = spamFilterEnabled ? filterMessages(eventMessages, blockedUsers) : eventMessages;
 
     // Convert back to EphemeralEventData format
     return filteredEventMessages.map(filteredMsg =>
       events.find(event => event.event.id === filteredMsg.event.id)!
     ).filter(Boolean);
-  }, [events, spamFilterEnabled]);
+  }, [events, spamFilterEnabled, blockedUsers]);
 
   // Apply spam filtering to global events for the counter
   const filteredGlobalEvents = useMemo(() => {
@@ -297,13 +297,13 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     }));
 
     // Apply filtering
-    const filteredEventMessages = filterMessages(eventMessages);
+    const filteredEventMessages = spamFilterEnabled ? filterMessages(eventMessages, blockedUsers) : eventMessages;
 
     // Convert back to EphemeralEventData format
     return filteredEventMessages.map(filteredMsg =>
       globalEvents.find(event => event.event.id === filteredMsg.event.id)!
     ).filter(Boolean);
-  }, [globalEvents, spamFilterEnabled]);
+  }, [globalEvents, spamFilterEnabled, blockedUsers]);
 
   // Process filtered events into heat map points
   const heatMapPoints = useMemo(() => {

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-import { Send, MapPin, Activity, User as UserIcon, Edit2, X, Swords, Flower, ChevronDown, UserRoundCheck } from 'lucide-react';
+import { Send, MapPin, Activity, User as UserIcon, Edit2, X, Swords, Flower, ChevronDown, UserRoundCheck, Ban, UserCheck } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useUserNickname } from '@/hooks/useUserNickname';
@@ -28,7 +28,20 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   const [message, setMessage] = useState('');
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
-  const { spamFilterEnabled, toggleSpamFilter } = useSpamFilter();
+  const { spamFilterEnabled, toggleSpamFilter, blockedUsers, blockUser, unblockUser, isUserBlocked } = useSpamFilter();
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    pubkey?: string;
+    nickname?: string;
+  }>({
+    visible: false,
+    x: 0,
+    y: 0,
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -225,6 +238,78 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
     }, 0);
   };
 
+  // Context menu handlers
+  // Context menu handlers
+  const handleContextMenu = (e: React.MouseEvent, nickname: string, pubkey: string) => {
+    e.preventDefault();
+
+    // Get chat dialog container to calculate relative position
+    const dialogContent = e.currentTarget.closest('[role="dialog"]');
+    if (dialogContent) {
+      const rect = dialogContent.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Calculate menu dimensions (estimate)
+      const menuWidth = 160;
+      const menuHeight = 40;
+
+      // Adjust position to keep menu within dialog bounds
+      const adjustedX = Math.min(x, rect.width - menuWidth - 10);
+      const adjustedY = Math.min(y, rect.height - menuHeight - 10);
+
+      setContextMenu({
+        visible: true,
+        x: Math.max(10, adjustedX), // Ensure minimum distance from left edge
+        y: Math.max(10, adjustedY), // Ensure minimum distance from top edge
+        pubkey,
+        nickname,
+      });
+    } else {
+      // Fallback to viewport coordinates if container not found
+      setContextMenu({
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        pubkey,
+        nickname,
+      });
+    }
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu(prev => ({ ...prev, visible: false }));
+  };
+
+  const handleBlockUser = () => {
+    if (contextMenu.pubkey) {
+      blockUser(contextMenu.pubkey);
+      closeContextMenu();
+    }
+  };
+
+  const handleUnblockUser = () => {
+    if (contextMenu.pubkey) {
+      unblockUser(contextMenu.pubkey);
+      closeContextMenu();
+    }
+  };
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    if (contextMenu.visible) {
+      const handleClickOutside = (e: MouseEvent) => {
+        // Check if click is outside the context menu
+        const contextMenuElement = document.querySelector('.absolute.z-50.bg-black.border-green-500\\/30');
+        if (contextMenuElement && !contextMenuElement.contains(e.target as Node)) {
+          closeContextMenu();
+        }
+      };
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenu.visible]);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl h-full sm:h-[600px] bg-black border border-green-500/30 flex flex-col p-4 pb-0 sm:p-6 sm:pb-0 overflow-hidden">
@@ -348,24 +433,46 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                   <span className="whitespace-pre-wrap break-all overflow-wrap-anywhere">No messages in channel. Be the first to transmit.</span>
                 </div>
               ) : (() => {
-                // Apply unified filtering (spam + deduplication)
-                const displayMessages = spamFilterEnabled ? filterMessages(chatMessages) : chatMessages;
+                // Apply unified filtering (spam + deduplication + blocked users)
+                const displayMessages = spamFilterEnabled ? filterMessages(chatMessages, blockedUsers) : chatMessages;
 
                 // Calculate counts for status display
                 const totalRemoved = chatMessages.length - displayMessages.length;
-                const spamCount = chatMessages.filter(msg => isLikelySpam(msg)).length;
-                const duplicateCount = totalRemoved - spamCount;
+                const spamCount = chatMessages.filter(msg => isLikelySpam(msg, blockedUsers)).length;
+                const blockedCount = chatMessages.filter(msg => blockedUsers.includes(msg.event.pubkey)).length;
+                const duplicateCount = totalRemoved - spamCount - blockedCount;
 
                 return (
                   <>
                     {/* Show filtering status messages */}
                     {totalRemoved > 0 && (
                       <div className="text-gray-500/50 py-1 w-full text-xs">
-                        {spamCount > 0 && duplicateCount > 0 ? (
+                        {spamCount > 0 && duplicateCount > 0 && blockedCount > 0 ? (
+                          <>
+                            <span className="text-green-500/30">🌸 </span>
+                            <span className="text-gray-500/40">
+                              {spamCount} spam, {blockedCount} blocked, {duplicateCount} duplicates removed
+                            </span>
+                          </>
+                        ) : spamCount > 0 && blockedCount > 0 ? (
+                          <>
+                            <span className="text-green-500/30">🌸 </span>
+                            <span className="text-gray-500/40">
+                              {spamCount} spam, {blockedCount} blocked removed
+                            </span>
+                          </>
+                        ) : spamCount > 0 && duplicateCount > 0 ? (
                           <>
                             <span className="text-green-500/30">🌸 </span>
                             <span className="text-gray-500/40">
                               {spamCount} spam, {duplicateCount} duplicates removed
+                            </span>
+                          </>
+                        ) : blockedCount > 0 && duplicateCount > 0 ? (
+                          <>
+                            <span className="text-red-500/30">🚫 </span>
+                            <span className="text-gray-500/40">
+                              {blockedCount} blocked, {duplicateCount} duplicates removed
                             </span>
                           </>
                         ) : spamCount > 0 ? (
@@ -373,6 +480,13 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                             <span className="text-green-500/30">🌸 </span>
                             <span className="text-gray-500/40">
                               {spamCount} filtered
+                            </span>
+                          </>
+                        ) : blockedCount > 0 ? (
+                          <>
+                            <span className="text-red-500/30">🚫 </span>
+                            <span className="text-gray-500/40">
+                              {blockedCount} blocked
                             </span>
                           </>
                         ) : duplicateCount > 0 ? (
@@ -402,13 +516,19 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                               &lt;{truncateNickname(session?.nickname || 'user')}<span className="text-[0.85em]" style={{ color: getPubkeyColor(msg.event.pubkey) }}>#{getPubkeySuffix(msg.event.pubkey)}</span>&gt;
                             </span>
                           ) : (
-                            <button
-                              onClick={() => handleUsernameClick(authorNickname, msg.event.pubkey)}
-                              className="text-green-400 hover:text-green-300 transition-colors cursor-pointer border-none bg-transparent p-0 m-0 font-mono"
-                              title={authorNickname}
-                            >
-                              &lt;{truncateNickname(authorNickname)}<span className="text-[0.85em]" style={{ color: getPubkeyColor(msg.event.pubkey) }}>#{getPubkeySuffix(msg.event.pubkey)}</span>&gt;
-                            </button>
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => handleUsernameClick(authorNickname, msg.event.pubkey)}
+                                onContextMenu={(e) => handleContextMenu(e, authorNickname, msg.event.pubkey)}
+                                className="text-green-400 hover:text-green-300 transition-colors cursor-pointer border-none bg-transparent p-0 m-0 font-mono"
+                                title={authorNickname}
+                              >
+                                &lt;{truncateNickname(authorNickname)}<span className="text-[0.85em]" style={{ color: getPubkeyColor(msg.event.pubkey) }}>#{getPubkeySuffix(msg.event.pubkey)}</span>&gt;
+                              </button>
+                              {isUserBlocked(msg.event.pubkey) && (
+                                <Ban className="h-3 w-3 text-red-400" />
+                              )}
+                            </div>
                           )}
                           <span className="text-gray-300 whitespace-pre-wrap break-all overflow-wrap-anywhere">
                             {highlightMentions(msg.message, displayMessages, user?.pubkey)}
@@ -456,6 +576,35 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
             </div>
           </div>
         </div>
+
+        {/* Context Menu */}
+        {contextMenu.visible && contextMenu.pubkey && (
+          <div
+            className="absolute z-50 bg-black border border-green-500/30 rounded-md shadow-lg py-1 min-w-[160px]"
+            style={{
+              left: contextMenu.x,
+              top: contextMenu.y,
+            }}
+          >
+            {isUserBlocked(contextMenu.pubkey) ? (
+              <button
+                onClick={handleUnblockUser}
+                className="w-full text-left px-3 py-2 text-sm text-green-400 hover:bg-green-500/10 transition-colors flex items-center gap-2"
+              >
+                <UserCheck className="h-4 w-4" />
+                Unblock User
+              </button>
+            ) : (
+              <button
+                onClick={handleBlockUser}
+                className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+              >
+                <Ban className="h-4 w-4" />
+                Block User
+              </button>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

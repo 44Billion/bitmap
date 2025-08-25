@@ -44,7 +44,7 @@ export function isCompleteRelayFailure(error: unknown): boolean {
  * Returns a filtered array with only legitimate, unique messages.
  * This function combines multiple detection strategies in one pass.
  */
-export function filterMessages(messages: EphemeralEventMessage[]): EphemeralEventMessage[] {
+export function filterMessages(messages: EphemeralEventMessage[], blockedUsers: string[] = []): EphemeralEventMessage[] {
   // Sort messages by timestamp first to ensure proper order for all detection methods
   const sortedMessages = [...messages].sort((a, b) => a.event.created_at - b.event.created_at);
 
@@ -55,7 +55,7 @@ export function filterMessages(messages: EphemeralEventMessage[]): EphemeralEven
     const message = sortedMessages[i];
 
     // Skip if it's detected as basic spam
-    if (isLikelySpam(message)) {
+    if (isLikelySpam(message, blockedUsers)) {
       continue;
     }
 
@@ -111,8 +111,13 @@ export function filterMessages(messages: EphemeralEventMessage[]): EphemeralEven
  * Determines if a chat message is likely spam based on various patterns.
  * Uses a sophisticated scoring system with multiple detection strategies.
  */
-export function isLikelySpam(message: EphemeralEventMessage): boolean {
-  const { message: content } = message;
+export function isLikelySpam(message: EphemeralEventMessage, blockedUsers: string[] = []): boolean {
+  const { message: content, event } = message;
+
+  // Check if user is blocked first
+  if (blockedUsers.includes(event.pubkey)) {
+    return true;
+  }
 
   // Immediate check for extremely long messages - auto-score as spam without further processing
   if (content.length > 1000) {
