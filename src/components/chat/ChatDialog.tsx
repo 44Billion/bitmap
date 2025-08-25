@@ -239,7 +239,6 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   };
 
   // Context menu handlers
-  // Context menu handlers
   const handleContextMenu = (e: React.MouseEvent, nickname: string, pubkey: string) => {
     e.preventDefault();
 
@@ -447,56 +446,30 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                     {/* Show filtering status messages */}
                     {totalRemoved > 0 && (
                       <div className="text-gray-500/50 py-1 w-full text-xs">
-                        {spamCount > 0 && duplicateCount > 0 && blockedCount > 0 ? (
-                          <>
-                            <span className="text-green-500/30">🌸 </span>
-                            <span className="text-gray-500/40">
-                              {spamCount} spam, {blockedCount} blocked, {duplicateCount} duplicates removed
-                            </span>
-                          </>
-                        ) : spamCount > 0 && blockedCount > 0 ? (
-                          <>
-                            <span className="text-green-500/30">🌸 </span>
-                            <span className="text-gray-500/40">
-                              {spamCount} spam, {blockedCount} blocked removed
-                            </span>
-                          </>
-                        ) : spamCount > 0 && duplicateCount > 0 ? (
-                          <>
-                            <span className="text-green-500/30">🌸 </span>
-                            <span className="text-gray-500/40">
-                              {spamCount} spam, {duplicateCount} duplicates removed
-                            </span>
-                          </>
-                        ) : blockedCount > 0 && duplicateCount > 0 ? (
-                          <>
-                            <span className="text-red-500/30">🚫 </span>
-                            <span className="text-gray-500/40">
-                              {blockedCount} blocked, {duplicateCount} duplicates removed
-                            </span>
-                          </>
-                        ) : spamCount > 0 ? (
-                          <>
-                            <span className="text-green-500/30">🌸 </span>
-                            <span className="text-gray-500/40">
-                              {spamCount} filtered
-                            </span>
-                          </>
-                        ) : blockedCount > 0 ? (
-                          <>
-                            <span className="text-red-500/30">🚫 </span>
-                            <span className="text-gray-500/40">
-                              {blockedCount} blocked
-                            </span>
-                          </>
-                        ) : duplicateCount > 0 ? (
-                          <>
-                            <span className="text-blue-500/30">🌸 </span>
-                            <span className="text-gray-500/40">
-                              {duplicateCount} duplicates removed
-                            </span>
-                          </>
-                        ) : null}
+                        {(() => {
+                          const items: Array<{ icon: string; color: string; text: string }> = [];
+
+                          if (spamCount > 0) items.push({ icon: '🌸', color: 'text-green-500/30', text: `${spamCount} spam` });
+                          if (blockedCount > 0) items.push({ icon: '🚫', color: 'text-red-500/30', text: `${blockedCount} blocked` });
+                          if (duplicateCount > 0) items.push({ icon: '🌸', color: 'text-blue-500/30', text: `${duplicateCount} duplicates` });
+
+                          if (items.length === 0) return null;
+
+                          const firstItem = items[0];
+                          const remainingItems = items.slice(1);
+
+                          return (
+                            <>
+                              <span className={firstItem.color}>{firstItem.icon} </span>
+                              <span className="text-gray-500/40">
+                                {firstItem.text}
+                                {remainingItems.length > 0 && `, ${remainingItems.map(item => item.text).join(', ')}`}
+                                {items.length > 1 && ' removed'}
+                                {items.length === 1 && (firstItem.text.includes('spam') ? ' filtered' : (firstItem.text.includes('blocked') ? '' : ' removed'))}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                     {displayMessages.map((msg) => {
@@ -517,6 +490,9 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                             </span>
                           ) : (
                             <div className="inline-flex items-center gap-1">
+                              {isUserBlocked(msg.event.pubkey) && (
+                                <Ban className="h-3 w-3 text-red-400" />
+                              )}
                               <button
                                 onClick={() => handleUsernameClick(authorNickname, msg.event.pubkey)}
                                 onContextMenu={(e) => handleContextMenu(e, authorNickname, msg.event.pubkey)}
@@ -525,9 +501,6 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                               >
                                 &lt;{truncateNickname(authorNickname)}<span className="text-[0.85em]" style={{ color: getPubkeyColor(msg.event.pubkey) }}>#{getPubkeySuffix(msg.event.pubkey)}</span>&gt;
                               </button>
-                              {isUserBlocked(msg.event.pubkey) && (
-                                <Ban className="h-3 w-3 text-red-400" />
-                              )}
                             </div>
                           )}
                           <span className="text-gray-300 whitespace-pre-wrap break-all overflow-wrap-anywhere">
