@@ -210,6 +210,21 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
     }
   };
 
+  // Handle username click to add mention
+  const handleUsernameClick = (nickname: string, pubkey: string) => {
+    const mentionText = `@${nickname}#${getPubkeySuffix(pubkey)} `;
+    setMessage(prev => prev + mentionText);
+
+    // Focus the input field after adding mention
+    setTimeout(() => {
+      const inputElement = document.querySelector('input[placeholder*="Type your message"]') as HTMLInputElement;
+      if (inputElement) {
+        inputElement.focus();
+        inputElement.setSelectionRange(inputElement.value.length, inputElement.value.length);
+      }
+    }, 0);
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl h-full sm:h-[600px] bg-black border border-green-500/30 flex flex-col p-4 pb-0 sm:p-6 sm:pb-0 overflow-hidden">
@@ -387,9 +402,13 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                               &lt;{truncateNickname(session?.nickname || 'user')}<span className="text-[0.85em]" style={{ color: getPubkeyColor(msg.event.pubkey) }}>#{getPubkeySuffix(msg.event.pubkey)}</span>&gt;
                             </span>
                           ) : (
-                            <span className="text-green-400" title={authorNickname}>
+                            <button
+                              onClick={() => handleUsernameClick(authorNickname, msg.event.pubkey)}
+                              className="text-green-400 hover:text-green-300 transition-colors cursor-pointer border-none bg-transparent p-0 m-0 font-mono"
+                              title={authorNickname}
+                            >
                               &lt;{truncateNickname(authorNickname)}<span className="text-[0.85em]" style={{ color: getPubkeyColor(msg.event.pubkey) }}>#{getPubkeySuffix(msg.event.pubkey)}</span>&gt;
-                            </span>
+                            </button>
                           )}
                           <span className="text-gray-300 whitespace-pre-wrap break-all overflow-wrap-anywhere">
                             {highlightMentions(msg.message, displayMessages, user?.pubkey)}
