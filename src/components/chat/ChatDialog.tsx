@@ -11,6 +11,9 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useUserNickname } from '@/hooks/useUserNickname';
 import { useToast } from '@/hooks/useToast';
 import { filterMessages, isLikelySpam, truncateNickname } from '@/lib/utils';
+import { getPubkeySuffix } from '@/lib/getPubkeySuffix';
+import { getPubkeyColor } from '@/lib/getPubkeyColor';
+import { highlightMentions } from '@/lib/highlightMentions';
 import { useSpamFilter } from '@/contexts/SpamFilterContext';
 
 import type { EphemeralEventMessage } from '@/hooks/useChatSession';
@@ -381,14 +384,16 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                           <span className="text-gray-500">[{timestamp}] </span>
                           {isOwn ? (
                             <span className="text-cyan-400" title={session?.nickname || 'user'}>
-                              &lt;{truncateNickname(session?.nickname || 'user')}&gt;
+                              &lt;{truncateNickname(session?.nickname || 'user')}<span className="text-[0.85em]" style={{ color: getPubkeyColor(msg.event.pubkey) }}>#{getPubkeySuffix(msg.event.pubkey)}</span>&gt;
                             </span>
                           ) : (
                             <span className="text-green-400" title={authorNickname}>
-                              &lt;{truncateNickname(authorNickname)}&gt;
+                              &lt;{truncateNickname(authorNickname)}<span className="text-[0.85em]" style={{ color: getPubkeyColor(msg.event.pubkey) }}>#{getPubkeySuffix(msg.event.pubkey)}</span>&gt;
                             </span>
                           )}
-                          <span className="text-gray-300 whitespace-pre-wrap break-all overflow-wrap-anywhere">{msg.message}</span>
+                          <span className="text-gray-300 whitespace-pre-wrap break-all overflow-wrap-anywhere">
+                            {highlightMentions(msg.message, displayMessages, user?.pubkey)}
+                          </span>
                         </div>
                       );
                     })}
