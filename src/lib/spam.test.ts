@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isLikelySpam, calculateSpamScore, isRepetitiveSpam, filterMessages } from './utils';
+import { isLikelySpam, calculateSpamScore, isRepetitiveSpam, isDistributedFloodSpam, filterMessages } from './utils';
 import type { EphemeralEventMessage } from '@/hooks/useChatSession';
 
 // Helper function to create a test message
@@ -498,6 +498,76 @@ describe('Spam Detection', () => {
       expect(filtered.some(msg => msg.message === 'how are you?')).toBe(true);
       expect(filtered.filter(msg => msg.message === 'more than 10 bots').length).toBe(1);
       expect(filtered.some(msg => msg.message.includes('SANTA CLAUS'))).toBe(false); // template spam filtered
+    });
+  });
+
+  describe('Distributed flood spam detection (user-agnostic)', () => {
+    it('detects identical messages from different users within time window', () => {
+      const baseTime = Date.now() / 1000;
+      const previousMessages = [
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime - 10, 'user1'),
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime - 5, 'user2'),
+      ];
+
+      const targetMessage = createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime, 'user3');
+
+      expect(isDistributedFloodSpam(targetMessage, previousMessages)).toBe(true);
+    });
+
+    it('does not flag messages outside time window', () => {
+      const baseTime = Date.now() / 1000;
+      const previousMessages = [
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime - 60, 'user1'), // 1 minute ago
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime - 55, 'user2'), // 55 seconds ago
+      ];
+
+      const targetMessage = createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime, 'user3');
+
+      expect(isDistributedFloodSpam(targetMessage, previousMessages)).toBe(false);
+    });
+
+    it('does not flag messages from same user', () => {
+      const baseTime = Date.now() / 1000;
+      const previousMessages = [
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime - 10, 'user1'),
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime - 5, 'user1'),
+      ];
+
+      const targetMessage = createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime, 'user1');
+
+      expect(isDistributedFloodSpam(targetMessage, previousMessages)).toBe(false);
+    });
+
+    it('does not flag different messages', () => {
+      const baseTime = Date.now() / 1000;
+      const previousMessages = [
+        createTestMessageWithTime('hello there', baseTime - 10, 'user1'),
+        createTestMessageWithTime('how are you?', baseTime - 5, 'user2'),
+      ];
+
+      const targetMessage = createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime, 'user3');
+
+      expect(isDistributedFloodSpam(targetMessage, previousMessages)).toBe(false);
+    });
+
+    it('handles integrated filtering with distributed spam', () => {
+      const baseTime = Date.now() / 1000;
+      const messages = [
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime - 12, 'spammer1'),
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime - 8, 'spammer2'),
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime - 4, 'spammer3'),
+        createTestMessageWithTime('https://project-sylvanas.net/ For the best wow bot', baseTime, 'spammer4'),
+        createTestMessageWithTime('hello everyone', baseTime - 10, 'user1'), // legitimate message
+        createTestMessageWithTime('how are you?', baseTime - 5, 'user2'), // legitimate message
+      ];
+
+      const filtered = filterMessages(messages);
+
+      // Should have the 2 legitimate messages and only 1 instance of the spam
+      expect(filtered.length).toBe(3);
+      expect(filtered.some(msg => msg.message === 'hello everyone')).toBe(true);
+      expect(filtered.some(msg => msg.message === 'how are you?')).toBe(true);
+      expect(filtered.filter(msg => msg.message.includes('project-sylvanas.net')).length).toBe(1);
     });
   });
 });

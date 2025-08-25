@@ -40,7 +40,7 @@ export function isCompleteRelayFailure(error: unknown): boolean {
 }
 
 /**
- * Filters messages by removing spam, duplicates, repetitive spam, and flood spam.
+ * Filters messages by removing spam, duplicates, repetitive spam, and distributed flood spam.
  * Returns a filtered array with only legitimate, unique messages.
  * This function combines multiple detection strategies in one pass.
  */
@@ -67,6 +67,11 @@ export function filterMessages(messages: EphemeralEventMessage[]): EphemeralEven
 
     // Check for flood spam using enhanced rate limiting and similarity detection
     if (isFloodSpam(message, recentMessages)) {
+      continue;
+    }
+
+    // Check for distributed flood spam (user-agnostic) - this catches coordinated attacks
+    if (isDistributedFloodSpam(message, sortedMessages.slice(0, i))) {
       continue;
     }
 
@@ -245,7 +250,43 @@ export function isRepetitiveSpam(
   return false;
 }
 
+/**
+ * Detects distributed flood spam across multiple users (user-agnostic).
+ * This catches coordinated attacks where different users send identical messages.
+ * Specifically designed to catch patterns like the WoW bot spam example.
+ */
+export function isDistributedFloodSpam(
+  message: EphemeralEventMessage,
+  previousMessages: EphemeralEventMessage[],
+  timeWindow: number = 30000, // 30 seconds default
+  minUsers: number = 2 // minimum different users to trigger
+): boolean {
+  const { event, message: content } = message;
+  const currentTime = event.created_at * 1000; // Convert to milliseconds
 
+  // Find messages from the time window, excluding the current message
+  const windowMessages = previousMessages.filter(msg =>
+    (currentTime - (msg.event.created_at * 1000)) <= timeWindow
+  );
+
+  // If we don't have enough messages to analyze, return false
+  if (windowMessages.length < minUsers - 1) {
+    return false;
+  }
+
+  // Check for exact matches across different users
+  const exactMatches = windowMessages.filter(msg =>
+    msg.event.pubkey !== event.pubkey && // Different user
+    msg.message === content // Exact same content
+  );
+
+  // If we found exact matches from different users, it's distributed spam
+  if (exactMatches.length >= minUsers - 1) {
+    return true;
+  }
+
+  return false;
+}
 
 /**
  * Calculates the Levenshtein distance between two strings.
