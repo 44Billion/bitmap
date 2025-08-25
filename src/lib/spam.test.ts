@@ -463,6 +463,50 @@ describe('Spam Detection', () => {
       expect(filtered.filter(msg => msg.message === 'more than 10 bots').length).toBe(1);
     });
 
+    it('removes duplicate messages across different users, keeping only the oldest', () => {
+      const baseTime = Date.now() / 1000;
+      const messages = [
+        createTestMessageWithTime('Check out this cool link!', baseTime - 30, 'user1'), // oldest
+        createTestMessageWithTime('Hello everyone!', baseTime - 25, 'user2'),
+        createTestMessageWithTime('Check out this cool link!', baseTime - 20, 'user3'), // duplicate, newer
+        createTestMessageWithTime('How are you doing?', baseTime - 15, 'user4'),
+        createTestMessageWithTime('Check out this cool link!', baseTime - 10, 'user5'), // duplicate, newer
+        createTestMessageWithTime('Nice weather today!', baseTime - 5, 'user6'),
+      ];
+
+      const filtered = filterMessages(messages);
+
+      // Should have: oldest "Check out this cool link!" + 3 other unique messages = 4 total
+      expect(filtered.length).toBe(4);
+
+      // Verify we have the oldest instance of the duplicate message
+      const duplicateMessages = filtered.filter(msg => msg.message === 'Check out this cool link!');
+      expect(duplicateMessages.length).toBe(1);
+      expect(duplicateMessages[0].event.pubkey).toBe('user1');
+      expect(duplicateMessages[0].event.created_at).toBe(baseTime - 30);
+
+      // Verify other unique messages are preserved
+      expect(filtered.some(msg => msg.message === 'Hello everyone!')).toBe(true);
+      expect(filtered.some(msg => msg.message === 'How are you doing?')).toBe(true);
+      expect(filtered.some(msg => msg.message === 'Nice weather today!')).toBe(true);
+    });
+
+    it('preserves duplicate messages that are spaced far apart in time', () => {
+      const baseTime = Date.now() / 1000;
+      const messages = [
+        createTestMessageWithTime('Hello world', baseTime - 600, 'user1'), // 10 minutes ago
+        createTestMessageWithTime('How are you?', baseTime - 400, 'user2'),
+        createTestMessageWithTime('Hello world', baseTime - 200, 'user3'), // 3+ minutes apart, should be preserved
+        createTestMessageWithTime('Nice to meet you', baseTime - 100, 'user4'),
+      ];
+
+      const filtered = filterMessages(messages);
+
+      // Should have all 4 messages since duplicates are spaced far apart (> 5 minutes)
+      expect(filtered.length).toBe(4);
+      expect(filtered.filter(msg => msg.message === 'Hello world').length).toBe(2);
+    });
+
     it('preserves legitimate repetitive messages that are spaced out', () => {
       const baseTime = Date.now() / 1000;
       const messages = [

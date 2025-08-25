@@ -48,7 +48,7 @@ export function filterMessages(messages: EphemeralEventMessage[]): EphemeralEven
   // Sort messages by timestamp first to ensure proper order for all detection methods
   const sortedMessages = [...messages].sort((a, b) => a.event.created_at - b.event.created_at);
 
-  // Create a map to track the oldest occurrence of each unique message per user
+  // Create a map to track the oldest occurrence of each unique message (global deduplication)
   const messageMap = new Map<string, EphemeralEventMessage>();
 
   for (let i = 0; i < sortedMessages.length; i++) {
@@ -75,25 +75,30 @@ export function filterMessages(messages: EphemeralEventMessage[]): EphemeralEven
       continue;
     }
 
-    // Create a unique key combining user pubkey and message content for deduplication
-    // Only apply deduplication for messages within a short time window (5 minutes)
-    const currentTime = message.event.created_at;
-    const uniqueKey = `${message.event.pubkey}:${message.message}`;
+    // Global deduplication: remove all duplicate messages except for the oldest one, regardless of user
+    // But only apply this within a reasonable time window (5 minutes) to preserve spaced-out legitimate messages
+    const messageContent = message.message;
+    const existingMessage = messageMap.get(messageContent);
 
-    // Check if we have a duplicate within the time window
-    const existingMessage = messageMap.get(uniqueKey);
+    // If we already have this message content, check the time difference
     if (existingMessage) {
-      const timeDiff = currentTime - existingMessage.event.created_at;
-      // If messages are more than 5 minutes apart, keep both
-      if (timeDiff > 300) { // 5 minutes = 300 seconds
-        messageMap.set(`${uniqueKey}:${currentTime}`, message);
-      }
-      // Otherwise, keep only the older one
-      else if (currentTime < existingMessage.event.created_at) {
-        messageMap.set(uniqueKey, message);
+      const timeDiff = Math.abs(message.event.created_at - existingMessage.event.created_at);
+
+      // If messages are more than 5 minutes (300 seconds) apart, treat them as separate legitimate messages
+      if (timeDiff > 300) {
+        // Use a timestamp-based key to keep both messages
+        const timeBasedKey = `${messageContent}:${message.event.created_at}`;
+        messageMap.set(timeBasedKey, message);
+      } else {
+        // Within 5 minutes: keep only the older message
+        if (message.event.created_at < existingMessage.event.created_at) {
+          messageMap.set(messageContent, message);
+        }
+        // Otherwise, skip this message (keep the existing older one)
       }
     } else {
-      messageMap.set(uniqueKey, message);
+      // This is the first time we've seen this message content
+      messageMap.set(messageContent, message);
     }
   }
 
