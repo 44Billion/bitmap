@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, MapPin, Activity, User as UserIcon, Edit2, X, Swords, Flower, ChevronDown, UserRoundCheck } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useUserNickname } from '@/hooks/useUserNickname';
 import { useToast } from '@/hooks/useToast';
 import { filterMessages, isLikelySpam, truncateNickname } from '@/lib/utils';
 import { useSpamFilter } from '@/contexts/SpamFilterContext';
@@ -31,7 +32,8 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previousMessageCountRef = useRef(0);
   const { session, sendMessage: sendChatMessage, isLoading, updateNickname } = useChatSession(geohash);
-  const { user, metadata } = useCurrentUser();
+  const { user } = useCurrentUser();
+  const { resetToDefault } = useUserNickname();
   const { toast } = useToast();
 
   // Use React Query to get chat messages
@@ -148,14 +150,14 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
 
   // Handle nickname editing
   const handleStartEditNickname = () => {
-    if (session && !user) {
+    if (session) {
       setNewNickname(session.nickname);
       setIsEditingNickname(true);
     }
   };
 
   const handleSaveNickname = () => {
-    if (newNickname.trim() && session && !user) {
+    if (newNickname.trim() && session) {
       updateNickname(newNickname.trim());
       setIsEditingNickname(false);
     }
@@ -164,6 +166,14 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   const handleCancelEditNickname = () => {
     setIsEditingNickname(false);
     setNewNickname('');
+  };
+
+  const handleResetToDefault = () => {
+    if (user) {
+      resetToDefault();
+      setIsEditingNickname(false);
+      setNewNickname('');
+    }
   };
 
   // Handle sending messages
@@ -247,12 +257,7 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
               <span className="sm:hidden">{geohash}</span>
             </div>
             <div className="flex items-center gap-1">
-              {user ? (
-                <>
-                  <UserRoundCheck className="h-3 w-3 text-blue-400" />
-                  <span className="text-blue-300">{metadata?.name || 'user'}</span>
-                </>
-              ) : isEditingNickname ? (
+              {isEditingNickname ? (
                 <div className="flex items-center gap-1">
                   <Input
                     value={newNickname}
@@ -272,6 +277,16 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                   >
                     ✓
                   </Button>
+                  {user && (
+                    <Button
+                      onClick={handleResetToDefault}
+                      size="sm"
+                      className="h-6 w-6 bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-400 p-0"
+                      title="Reset to default name"
+                    >
+                      ↺
+                    </Button>
+                  )}
                   <Button
                     onClick={handleCancelEditNickname}
                     size="sm"
@@ -282,12 +297,16 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
                 </div>
               ) : (
                 <>
-                  <UserIcon className="h-3 w-3 text-yellow-400" />
+                  {user ? (
+                    <UserRoundCheck className="h-3 w-3 text-blue-400" />
+                  ) : (
+                    <UserIcon className="h-3 w-3 text-yellow-400" />
+                  )}
                   <button
                     onClick={handleStartEditNickname}
-                    className="text-yellow-300 hover:text-yellow-200 transition-colors flex items-center gap-1"
+                    className={`${user ? 'text-blue-300 hover:text-blue-200' : 'text-yellow-300 hover:text-yellow-200'} transition-colors flex items-center gap-1`}
                   >
-                    {session ? `Ephemeral: ${session.nickname}` : 'Connecting...'}
+                    {session ? session.nickname : 'Connecting...'}
                     <Edit2 className="h-3 w-3" />
                   </button>
                 </>

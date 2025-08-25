@@ -21,6 +21,7 @@ import { Loader2, Upload } from 'lucide-react';
 import { NSchema as n, type NostrMetadata } from '@nostrify/nostrify';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUploadFile } from '@/hooks/useUploadFile';
+import { UserNicknameEditor } from './UserNicknameEditor';
 
 export const EditProfileForm: React.FC = () => {
   const queryClient = useQueryClient();
@@ -234,6 +235,9 @@ export const EditProfileForm: React.FC = () => {
             )}
           />
         </div>
+
+        {/* User Nickname Editor for logged-in users */}
+        {user && <UserNicknameEditor />}
 
         <FormField
           control={form.control}

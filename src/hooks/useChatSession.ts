@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNostr } from '@nostrify/react';
 import { useCurrentUser } from './useCurrentUser';
 import { useEphemeralIdentity } from './useEphemeralIdentity';
+import { useUserNickname } from './useUserNickname';
 import { finalizeEvent } from 'nostr-tools';
 import { isCompleteRelayFailure, truncateNickname } from '@/lib/utils';
 import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
@@ -35,6 +36,7 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
   const ephemeralIdentity = useEphemeralIdentity();
+  const { nickname: userNickname, setNickname: setUserNickname } = useUserNickname();
   const [session, setSession] = useState<ChatSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -42,13 +44,12 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
   useEffect(() => {
     if (geohash) {
       if (user && user.pubkey) {
-        // Use logged-in user's identity
-        const { metadata: userMetadata } = user as { metadata?: { name?: string } }; // Type assertion
+        // Use logged-in user's identity with custom nickname
         setSession({
           privateKey: new Uint8Array(), // Empty array for logged-in users
           pubkey: user.pubkey,
           npub: '', // We don't need npub for logged-in users
-          nickname: userMetadata?.name || 'user',
+          nickname: userNickname || 'user',
         });
       } else if (ephemeralIdentity.identity) {
         // Use ephemeral identity
@@ -60,7 +61,7 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
       }
       setIsLoading(false);
     }
-  }, [geohash, user, ephemeralIdentity]);
+  }, [geohash, user, ephemeralIdentity, userNickname]);
 
   // Subscribe to new messages in the geohash
   useEffect(() => {
@@ -153,12 +154,19 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
 
   // Update nickname function
   const updateNickname = useCallback((newNickname: string) => {
-    if (session && !user) {
-      setSession(prev => prev ? { ...prev, nickname: newNickname } : null);
-      // Also update ephemeral identity state
-      ephemeralIdentity.updateNickname(newNickname);
+    if (session) {
+      if (user) {
+        // Update logged-in user's nickname
+        setUserNickname(newNickname);
+        setSession(prev => prev ? { ...prev, nickname: newNickname } : null);
+      } else {
+        // Update ephemeral user's nickname
+        setSession(prev => prev ? { ...prev, nickname: newNickname } : null);
+        // Also update ephemeral identity state
+        ephemeralIdentity.updateNickname(newNickname);
+      }
     }
-  }, [session, user, ephemeralIdentity]);
+  }, [session, user, ephemeralIdentity, setUserNickname]);
 
   // Handle initial events from map bubble
   useEffect(() => {

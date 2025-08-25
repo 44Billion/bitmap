@@ -217,6 +217,10 @@ export function isRepetitiveSpam(
  * required to change one string into the other.
  */
 export function levenshteinDistance(str1: string, str2: string): number {
+  if (str1.length > 1000 || str2.length > 1000) {
+    return Math.abs(str1.length - str2.length); // Simple fallback
+  }
+
   const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
 
   for (let i = 0; i <= str1.length; i += 1) {
@@ -246,6 +250,10 @@ export function levenshteinDistance(str1: string, str2: string): number {
  * Returns a value between 0 (completely different) and 1 (identical).
  */
 export function similarityRatio(str1: string, str2: string): number {
+  if (str1.length > 1000 || str2.length > 1000) {
+    return 0; // Conservative approach
+  }
+
   const normalized1 = str1.trim().toLowerCase();
   const normalized2 = str2.trim().toLowerCase();
 
@@ -375,6 +383,10 @@ export function isFloodSpam(
  */
 export function calculateSpamScore(content: string): number {
   let score = 0;
+
+  if (content.length > 5000) {
+    return 1; // Minor penalty for very long content but don't process further
+  }
 
   const lowerContent = content.toLowerCase();
 
@@ -527,6 +539,10 @@ export function calculateSpamScore(content: string): number {
  * Checks if content is mostly capitalized (more than 70% caps)
  */
 function isMostlyCaps(content: string): boolean {
+  if (content.length > 5000) {
+    return false;
+  }
+
   const alphaChars = content.replace(/[^a-zA-Z]/g, '');
   if (alphaChars.length < 10) return false;
 
@@ -539,6 +555,10 @@ function isMostlyCaps(content: string): boolean {
  */
 function detectStructuralAnomalies(content: string): number {
   let score = 0;
+
+  if (content.length > 5000) {
+    return 0;
+  }
 
   // Unusual character distributions
   const alphaRatio = (content.match(/[a-zA-Z]/g) || []).length / content.length;
