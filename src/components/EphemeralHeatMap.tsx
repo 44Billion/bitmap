@@ -212,6 +212,11 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   const { data: globalEvents, isLoading: globalLoading, error: globalError, isFetching: globalFetching, connectionProgress: globalProgress } = useEphemeralEvents(undefined);
   const { data: chatEvents } = useEphemeralEvents(selectedGeohash || undefined);
 
+  // Log whenever globalProgress changes
+  useEffect(() => {
+    console.log('🔄 globalProgress changed:', globalProgress);
+  }, [globalProgress]);
+
   // Use appropriate events data based on context
   const events = selectedGeohash ? chatEvents : globalEvents;
 
@@ -475,12 +480,14 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   };
 
   if (showLoadingOverlay) {
+    const hasProgress = globalProgress && globalProgress.totalRelays > 0;
+    console.log('🔍 Loading overlay shown, hasProgress:', hasProgress, 'globalProgress:', globalProgress);
     return (
       <div className={cn("bg-black flex items-center justify-center", className)}>
         <div className="text-center text-cyan-400 font-mono space-y-3">
           <Activity className="h-8 w-8 mx-auto mb-2 animate-pulse" />
           <div className="text-sm">LOADING BITMAP...</div>
-          {globalProgress && globalProgress.totalRelays > 0 && (
+          {hasProgress ? (
             <div className="space-y-2">
               <div className="text-xs text-green-400">
                 CONNECTED: {globalProgress.connectedRelays.length} / {globalProgress.totalRelays} RELAYS
@@ -500,6 +507,10 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
                   )}
                 </div>
               </div>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500">
+              Initializing relay connections...
             </div>
           )}
         </div>

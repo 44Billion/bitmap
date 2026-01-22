@@ -6,7 +6,7 @@ import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
 import { decode } from 'ngeohash';
 import { useDisabledRelays } from '@/hooks/useDisabledRelays';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export interface EphemeralEventData {
   event: NostrEvent;
@@ -57,18 +57,36 @@ export function useEphemeralEvents(targetGeohash?: string) {
   const [geoRelayPoolSize] = useLocalStorage<number>('bitmap:geoRelayPoolSize', 16);
   const [connectionProgress, setConnectionProgress] = useState({ connectedRelays: [] as string[], totalRelays: 0 });
 
-  // Set up the global updater
-  useEffect(() => {
-    updateProgress = (relays: string[], total: number) => {
+  // Only track progress for global queries (not chat-specific queries)
+  const shouldTrackProgress = !targetGeohash;
+
+  // Set up the global updater - use useCallback to ensure stable reference
+  const updateProgressCallback = useCallback((relays: string[], total: number) => {
+    console.log('📊 Progress update:', { relayCount: relays.length, total, shouldTrack: shouldTrackProgress });
+    if (shouldTrackProgress) {
       setConnectionProgress({ connectedRelays: relays, totalRelays: total });
-    };
+    }
+  }, [shouldTrackProgress]);
+
+  // Set up the global updater only for global queries
+  useEffect(() => {
+    if (shouldTrackProgress) {
+      const prevUpdateProgress = updateProgress;
+      updateProgress = updateProgressCallback;
+      console.log('🎯 Set up progress tracking for global query, prev was:', !!prevUpdateProgress);
+    }
     return () => {
-      updateProgress = null;
+      if (shouldTrackProgress && updateProgress === updateProgressCallback) {
+        updateProgress = null;
+        console.log('🎯 Cleaned up progress tracking');
+      }
     };
-  }, []);
+  }, [updateProgressCallback, shouldTrackProgress]);
 
   const queryResult = useQuery({
     queryKey: ['ephemeral-events', targetGeohash],
+    // Reduce staleTime for initial load to ensure we see progress
+    staleTime: shouldTrackProgress ? 1000 : 5000,
     queryFn: async (c) => {
       const signal = AbortSignal.any([c.signal, AbortSignal.timeout(60000)]); // 1 minute timeout
       const oneHourAgo = Math.floor(Date.now() / 1000) - ONE_HOUR_SECONDS;
@@ -147,6 +165,12 @@ export function useEphemeralEvents(targetGeohash?: string) {
         const connectedRelays: string[] = [...enabledDefaultRelays];
         const totalRelays = enabledDefaultRelays.length + availableRegionalRelays.length;
 
+        console.log('🔍 Initial relay setup:', {
+          connectedCount: connectedRelays.length,
+          totalRelays,
+          hasUpdateProgress: !!updateProgress
+        });
+
         // Update initial progress
         if (updateProgress) {
           updateProgress(connectedRelays, totalRelays);
@@ -206,7 +230,6 @@ export function useEphemeralEvents(targetGeohash?: string) {
       return uniqueEvents.filter(validateEphemeralEvent).map(transformEphemeralEvent);
     },
     refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
-    staleTime: 5000, // Consider data stale after 5 seconds
     placeholderData: (previousData) => previousData, // Keep showing previous data while fetching
   });
 
