@@ -264,6 +264,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   }, []);
 
   // Apply enhanced spam filtering based on user preference
+  // BUT: Always preserve heartbeat events (empty messages) - they cluster separately
   const filteredEvents = useMemo(() => {
     if (!events || events.length === 0) {
       return [];
@@ -274,22 +275,30 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       return events;
     }
 
-    // Convert to EphemeralEventMessage format for filtering
-    const eventMessages: EphemeralEventMessage[] = events.map(event => ({
+    // Split events into heartbeats (empty messages) and actual messages
+    const heartbeats = events.filter(e => !e.message || e.message.trim().length === 0);
+    const messagesWithContent = events.filter(e => e.message && e.message.trim().length > 0);
+
+    // Only filter events that have message content
+    const eventMessages: EphemeralEventMessage[] = messagesWithContent.map(event => ({
       event: event.event,
       message: event.message
     }));
 
-    // Apply filtering
-    const filteredEventMessages = spamFilterEnabled ? filterMessages(eventMessages, blockedUsers) : eventMessages;
+    // Apply spam filtering only to messages with content
+    const filteredEventMessages = filterMessages(eventMessages, blockedUsers);
 
     // Convert back to EphemeralEventData format
-    return filteredEventMessages.map(filteredMsg =>
-      events.find(event => event.event.id === filteredMsg.event.id)!
+    const filteredMessagesWithContent = filteredEventMessages.map(filteredMsg =>
+      messagesWithContent.find(event => event.event.id === filteredMsg.event.id)!
     ).filter(Boolean);
+
+    // Combine filtered messages with ALL heartbeats (never filter heartbeats)
+    return [...filteredMessagesWithContent, ...heartbeats];
   }, [events, spamFilterEnabled, blockedUsers]);
 
   // Apply spam filtering to global events for the counter
+  // BUT: Always preserve heartbeat events (empty messages) - they cluster separately
   const filteredGlobalEvents = useMemo(() => {
     if (!globalEvents || globalEvents.length === 0) {
       return [];
@@ -300,19 +309,26 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       return globalEvents;
     }
 
-    // Convert to EphemeralEventMessage format for filtering
-    const eventMessages: EphemeralEventMessage[] = globalEvents.map(event => ({
+    // Split events into heartbeats (empty messages) and actual messages
+    const heartbeats = globalEvents.filter(e => !e.message || e.message.trim().length === 0);
+    const messagesWithContent = globalEvents.filter(e => e.message && e.message.trim().length > 0);
+
+    // Only filter events that have message content
+    const eventMessages: EphemeralEventMessage[] = messagesWithContent.map(event => ({
       event: event.event,
       message: event.message
     }));
 
-    // Apply filtering
-    const filteredEventMessages = spamFilterEnabled ? filterMessages(eventMessages, blockedUsers) : eventMessages;
+    // Apply spam filtering only to messages with content
+    const filteredEventMessages = filterMessages(eventMessages, blockedUsers);
 
     // Convert back to EphemeralEventData format
-    return filteredEventMessages.map(filteredMsg =>
-      globalEvents.find(event => event.event.id === filteredMsg.event.id)!
+    const filteredMessagesWithContent = filteredEventMessages.map(filteredMsg =>
+      messagesWithContent.find(event => event.event.id === filteredMsg.event.id)!
     ).filter(Boolean);
+
+    // Combine filtered messages with ALL heartbeats (never filter heartbeats)
+    return [...filteredMessagesWithContent, ...heartbeats];
   }, [globalEvents, spamFilterEnabled, blockedUsers]);
 
   // Process filtered events into heat map points
