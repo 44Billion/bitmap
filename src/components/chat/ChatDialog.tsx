@@ -92,8 +92,8 @@ export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: Cha
     // Get current user pubkey to check if message is from self
     const currentUserPubkey = user?.pubkey;
 
-    // Only show toast if the message is from someone else
-    if (incomingMessage.event.pubkey !== currentUserPubkey && incomingMessage.message.trim()) {
+    // Only show toast if the message is from someone else and dialog is open
+    if (incomingMessage.event.pubkey !== currentUserPubkey && incomingMessage.message.trim() && isOpen) {
       const senderName = incomingMessage.nickname || 'Anonymous';
       const preview = incomingMessage.message.slice(0, 50) + (incomingMessage.message.length > 50 ? '...' : '');
       const messageGeohash = incomingMessage.geohash || geohash;
@@ -107,16 +107,22 @@ export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: Cha
             onClick={() => {
               // Scroll to bottom to show the new message
               scrollToBottom();
+              // Focus the dialog by focusing the input
+              setTimeout(() => {
+                const inputElement = document.querySelector('input[placeholder*="Type your message"]') as HTMLInputElement;
+                if (inputElement) {
+                  inputElement.focus();
+                }
+              }, 100);
             }}
             className="bg-cyan-500/20 hover:bg-cyan-500/30 border-cyan-500/50 text-cyan-400 text-xs h-7"
           >
-            <MessageSquare className="h-3 w-3 mr-1" />
-            Join Chat
+            Join
           </Button>
         ),
       });
     }
-  }, [user?.pubkey, toast, geohash, scrollToBottom]);
+  }, [user?.pubkey, toast, geohash, scrollToBottom, isOpen]);
 
   const {
     session,
