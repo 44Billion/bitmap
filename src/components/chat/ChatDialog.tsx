@@ -36,11 +36,12 @@ interface InitialEvent {
 interface ChatDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpen?: () => void;
   geohash: string;
   initialEvents?: InitialEvent[];
 }
 
-export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: ChatDialogProps) {
+export function ChatDialog({ isOpen, onClose, onOpen, geohash, initialEvents = [] }: ChatDialogProps) {
   const [message, setMessage] = useState('');
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
@@ -92,8 +93,8 @@ export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: Cha
     // Get current user pubkey to check if message is from self
     const currentUserPubkey = user?.pubkey;
 
-    // Only show toast if the message is from someone else and dialog is open
-    if (incomingMessage.event.pubkey !== currentUserPubkey && incomingMessage.message.trim() && isOpen) {
+    // Only show toast if the message is from someone else
+    if (incomingMessage.event.pubkey !== currentUserPubkey && incomingMessage.message.trim()) {
       const senderName = incomingMessage.nickname || 'Anonymous';
       const preview = incomingMessage.message.slice(0, 50) + (incomingMessage.message.length > 50 ? '...' : '');
       const messageGeohash = incomingMessage.geohash || geohash;
@@ -105,10 +106,14 @@ export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: Cha
           <Button
             size="sm"
             onClick={() => {
+              // If dialog is closed, open it
+              if (!isOpen && onOpen) {
+                onOpen();
+              }
               // Scroll to bottom to show the new message
-              scrollToBottom();
-              // Focus the dialog by focusing the input
               setTimeout(() => {
+                scrollToBottom();
+                // Focus the input
                 const inputElement = document.querySelector('input[placeholder*="Type your message"]') as HTMLInputElement;
                 if (inputElement) {
                   inputElement.focus();
@@ -122,7 +127,7 @@ export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: Cha
         ),
       });
     }
-  }, [user?.pubkey, toast, geohash, scrollToBottom, isOpen]);
+  }, [user?.pubkey, toast, geohash, scrollToBottom, isOpen, onOpen]);
 
   const {
     session,

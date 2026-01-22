@@ -656,6 +656,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
       <ChatDialog
         isOpen={chatDialog.isOpen}
         onClose={handleCloseChat}
+        onOpen={() => setChatDialog(prev => ({ ...prev, isOpen: true }))}
         geohash={chatDialog.geohash}
         initialEvents={chatDialog.initialEvents}
       />
