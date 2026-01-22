@@ -5,6 +5,7 @@ import { truncateNickname } from '@/lib/utils';
 import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
 import { decode } from 'ngeohash';
 import { useDisabledRelays } from '@/hooks/useDisabledRelays';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 export interface EphemeralEventData {
   event: NostrEvent;
@@ -43,6 +44,7 @@ const ONE_HOUR_SECONDS = 60 * 60;
 export function useEphemeralEvents(targetGeohash?: string) {
   const { nostr } = useNostr();
   const { getEnabledRelays } = useDisabledRelays();
+  const [geoRelayPoolSize] = useLocalStorage<number>('bitmap:geoRelayPoolSize', 16);
 
   return useQuery({
     queryKey: ['ephemeral-events', targetGeohash],
@@ -105,13 +107,13 @@ export function useEphemeralEvents(targetGeohash?: string) {
         allDefaultRelays.forEach(relay => failedRelays.add(relay));
       }
 
-      // Phase 2: Geographic relay loading with rotation (max 8 relays)
+      // Phase 2: Geographic relay loading with rotation (configurable pool size)
       try {
         const geoRelays = await fetchGeoRelays();
 
-        // Use 8 rotating relays for geographic coverage
+        // Use rotating relays for geographic coverage (user-configurable pool size)
         const rotationIndex = Math.floor(Date.now() / 300000) % geoRelays.length;
-        const selectedRegionalRelays = geoRelays.slice(rotationIndex, rotationIndex + 8);
+        const selectedRegionalRelays = geoRelays.slice(rotationIndex, rotationIndex + geoRelayPoolSize);
 
         // Filter out failed default relays and duplicates
         const availableRegionalRelays = selectedRegionalRelays.filter(

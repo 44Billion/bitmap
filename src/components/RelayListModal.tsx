@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { List, X, Wifi, Globe, MapPin, Loader2, RefreshCw, WifiOff } from 'lucide-react';
+import { List, X, Wifi, Globe, MapPin, Loader2, RefreshCw, WifiOff, AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useDisabledRelays } from '@/hooks/useDisabledRelays';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { fetchGeoRelays, type GeoRelay } from '@/lib/georelays';
 import { REGIONS, groupRelaysByRegion, type Region } from '@/lib/relayCoverage';
 import { cn } from '@/lib/utils';
@@ -29,6 +31,7 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
   isRegionFullyEnabled,
   isRegionFullyDisabled
 } = useDisabledRelays();
+  const [geoRelayPoolSize, setGeoRelayPoolSize] = useLocalStorage<number>('bitmap:geoRelayPoolSize', 16);
   const [geoRelays, setGeoRelays] = useState<GeoRelay[]>([]);
   const [regionalGroups, setRegionalGroups] = useState<RegionalRelayGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -185,6 +188,63 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Global Georelay Pool Size Setting */}
+          <div className="space-y-3 bg-gray-900/30 border border-yellow-500/20 rounded-lg p-3 sm:p-4">
+            <div className="flex items-center gap-2 text-yellow-400 font-mono text-sm">
+              <Globe className="h-4 w-4" />
+              <span>GLOBAL GEORELAY POOL SIZE</span>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400 font-mono">
+                  Relays in rotation: <span className="text-yellow-400 font-bold">{geoRelayPoolSize}</span>
+                </span>
+                <span className="text-xs text-gray-500 font-mono">
+                  (rotates every 5 min)
+                </span>
+              </div>
+
+              <Slider
+                value={[geoRelayPoolSize]}
+                onValueChange={(values) => setGeoRelayPoolSize(values[0])}
+                min={8}
+                max={64}
+                step={8}
+                className="w-full"
+              />
+
+              <div className="flex items-center justify-between text-xs text-gray-500 font-mono">
+                <span>8</span>
+                <span>16</span>
+                <span>24</span>
+                <span>32</span>
+                <span>40</span>
+                <span>48</span>
+                <span>56</span>
+                <span>64</span>
+              </div>
+
+              {geoRelayPoolSize > 32 && (
+                <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded p-2 sm:p-3">
+                  <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="text-xs text-yellow-400 font-mono font-bold">
+                      WARNING: HIGH RELAY COUNT
+                    </div>
+                    <div className="text-xs text-yellow-300/90 font-mono">
+                      Connecting to {geoRelayPoolSize} relays simultaneously may impact performance and increase bandwidth usage. Recommended: 16-24 relays for optimal balance.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-gray-400 font-mono">
+                Higher values increase global coverage but may impact performance. The app rotates through different geographic relays every 5 minutes to discover messages worldwide.
+              </div>
             </div>
           </div>
 
