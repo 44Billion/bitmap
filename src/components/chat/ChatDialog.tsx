@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-import { Send, MapPin, Activity, User as UserIcon, Edit2, X, Swords, Flower, ChevronDown, UserRoundCheck, Ban, UserCheck } from 'lucide-react';
+import { Send, MapPin, Activity, User as UserIcon, Edit2, X, Swords, Flower, ChevronDown, UserRoundCheck, Ban, UserCheck, MessageSquare } from 'lucide-react';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useUserNickname } from '@/hooks/useUserNickname';
@@ -84,13 +84,27 @@ export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: Cha
     if (incomingMessage.event.pubkey !== currentUserPubkey && incomingMessage.message.trim()) {
       const senderName = incomingMessage.nickname || 'Anonymous';
       const preview = incomingMessage.message.slice(0, 50) + (incomingMessage.message.length > 50 ? '...' : '');
+      const messageGeohash = incomingMessage.geohash || geohash;
 
       toast({
         title: `New message from ${senderName}`,
-        description: preview,
+        description: `Geohash: ${messageGeohash}\n${preview}`,
+        action: (
+          <Button
+            size="sm"
+            onClick={() => {
+              // Scroll to bottom to show the new message
+              scrollToBottom();
+            }}
+            className="bg-cyan-500/20 hover:bg-cyan-500/30 border-cyan-500/50 text-cyan-400 text-xs h-7"
+          >
+            <MessageSquare className="h-3 w-3 mr-1" />
+            Join Chat
+          </Button>
+        ),
       });
     }
-  }, [user?.pubkey, toast]);
+  }, [user?.pubkey, toast, geohash, scrollToBottom]);
 
   const {
     session,
