@@ -75,6 +75,18 @@ export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: Cha
     message: e.message,
   }));
 
+  // Scroll to bottom function - defined early so it can be used in handleNewMessage
+  const scrollToBottom = useCallback(() => {
+    if (scrollRef.current) {
+      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        (viewport as HTMLElement).scrollTop = (viewport as HTMLElement).scrollHeight;
+        setShowScrollButton(false);
+        setIsAtBottom(true);
+      }
+    }
+  }, []);
+
   // Handle new message callback for toast notifications
   const handleNewMessage = useCallback((incomingMessage: EphemeralEventMessage) => {
     // Get current user pubkey to check if message is from self
@@ -206,18 +218,6 @@ export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: Cha
       setShowScrollButton(false);
     }
   }, [isAtBottom]);
-
-  // Scroll to bottom function
-  const scrollToBottom = useCallback(() => {
-    if (scrollRef.current) {
-      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (viewport) {
-        (viewport as HTMLElement).scrollTop = (viewport as HTMLElement).scrollHeight;
-        setShowScrollButton(false);
-        setIsAtBottom(true);
-      }
-    }
-  }, []);
 
   // Handle nickname editing
   const handleStartEditNickname = () => {
