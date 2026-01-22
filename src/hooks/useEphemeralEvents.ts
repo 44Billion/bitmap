@@ -67,7 +67,7 @@ export function useEphemeralEvents(targetGeohash?: string) {
     };
   }, []);
 
-  const query = useQuery({
+  const queryResult = useQuery({
     queryKey: ['ephemeral-events', targetGeohash],
     queryFn: async (c) => {
       const signal = AbortSignal.any([c.signal, AbortSignal.timeout(60000)]); // 1 minute timeout
@@ -210,8 +210,6 @@ export function useEphemeralEvents(targetGeohash?: string) {
     placeholderData: (previousData) => previousData, // Keep showing previous data while fetching
   });
 
-  return {
-    ...query,
-    connectionProgress,
-  };
+  // Return an object that includes all query properties plus connectionProgress
+  return Object.assign({}, queryResult, { connectionProgress });
 }
