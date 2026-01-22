@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap, Rectangle } from 'react-leaflet';
 import { decode, decode_bbox } from 'ngeohash';
 import type { LatLngExpression } from 'leaflet';
+import type { Map as LeafletMap } from 'leaflet';
 import L from 'leaflet';
 import { useEphemeralEvents, type EphemeralEventData } from '@/hooks/useEphemeralEvents';
 import { AlertTriangle, Activity, MapPin, User, Plus, Minus, MessageSquare, Flower, Swords, List } from 'lucide-react';
@@ -12,6 +13,11 @@ import { ChatDialog } from '@/components/chat/ChatDialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/useToast';
 import LoginDialog from '@/components/auth/LoginDialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { Users, MessageCircle } from 'lucide-react';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -24,6 +30,88 @@ interface HeatMapPoint {
   intensity: number;
   events: EphemeralEventData[];
   hasMessages: boolean; // true if any event has a message (not just heartbeat)
+}
+
+// Clustering configuration
+const CLUSTER_RADIUS_PX = 60; // Pixel radius to cluster markers together
+const DISABLE_CLUSTERING_AT_ZOOM = 6; // Show individual markers at this zoom and higher
+
+interface ClusteredMarker {
+  id: string;
+  coordinates: [number, number]; // [lng, lat] - center of cluster
+  markers: HeatMapPoint[];
+  totalIntensity: number;
+  hasAnyMessages: boolean;
+}
+
+// Function to cluster markers based on pixel proximity
+function clusterMarkers(
+  markers: HeatMapPoint[],
+  map: LeafletMap,
+  radiusPx: number
+): ClusteredMarker[] {
+  if (markers.length === 0) return [];
+
+  // Convert markers to pixel positions
+  const markersWithPixels = markers.map((marker, idx) => ({
+    marker,
+    idx,
+    pixel: map.latLngToContainerPoint([marker.lat, marker.lng])
+  }));
+
+  const clusters: ClusteredMarker[] = [];
+  const assigned = new Set<number>();
+
+  for (let i = 0; i < markersWithPixels.length; i++) {
+    if (assigned.has(i)) continue;
+
+    const clusterMembers: HeatMapPoint[] = [markersWithPixels[i].marker];
+    const clusterIndices: number[] = [markersWithPixels[i].idx];
+    assigned.add(i);
+
+    // Find all markers within radius
+    for (let j = i + 1; j < markersWithPixels.length; j++) {
+      if (assigned.has(j)) continue;
+
+      const dx = markersWithPixels[i].pixel.x - markersWithPixels[j].pixel.x;
+      const dy = markersWithPixels[i].pixel.y - markersWithPixels[j].pixel.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= radiusPx) {
+        clusterMembers.push(markersWithPixels[j].marker);
+        clusterIndices.push(markersWithPixels[j].idx);
+        assigned.add(j);
+      }
+    }
+
+    // Calculate cluster center (weighted by intensity)
+    let totalLng = 0;
+    let totalLat = 0;
+    let totalWeight = 0;
+    let totalIntensity = 0;
+    let hasAnyMessages = false;
+
+    for (const member of clusterMembers) {
+      const weight = member.intensity;
+      totalLng += member.lng * weight;
+      totalLat += member.lat * weight;
+      totalWeight += weight;
+      totalIntensity += member.intensity;
+      if (member.hasMessages) {
+        hasAnyMessages = true;
+      }
+    }
+
+    clusters.push({
+      id: `cluster-${clusterIndices.sort().join('-')}`,
+      coordinates: [totalLng / totalWeight, totalLat / totalWeight],
+      markers: clusterMembers,
+      totalIntensity,
+      hasAnyMessages,
+    });
+  }
+
+  return clusters;
 }
 
 // Custom zoom controls component
@@ -122,6 +210,99 @@ function MapBoundaryEnforcer() {
 
   return null;
 }
+
+// Cluster popup showing multiple locations
+const ClusterPopup = React.memo(({ cluster, onOpenChat }: {
+  cluster: ClusteredMarker;
+  onOpenChat: (geohash: string, events: EphemeralEventData[]) => void;
+}) => {
+  // Flatten all events from all markers in the cluster
+  const allEvents = cluster.markers.flatMap(m => m.events);
+
+  // Group events by their full geohash
+  const eventsByGeohash = useMemo(() => {
+    const groups = new Map<string, EphemeralEventData[]>();
+    allEvents.forEach(event => {
+      if (!event.geohash) return;
+      if (!groups.has(event.geohash)) {
+        groups.set(event.geohash, []);
+      }
+      groups.get(event.geohash)!.push(event);
+    });
+    return groups;
+  }, [allEvents]);
+
+  // Get unique geohashes with their info - only those with actual messages
+  const geohashInfos = useMemo(() => {
+    return Array.from(eventsByGeohash.entries())
+      .map(([geohash, events]) => {
+        const messagesWithContent = events.filter(e => e.message && e.message.trim().length > 0);
+        const latestMessage = messagesWithContent[0];
+        return {
+          geohash,
+          events,
+          messageCount: messagesWithContent.length,
+          userCount: new Set(events.map(e => e.event.pubkey)).size,
+          latestMessage,
+        };
+      })
+      .filter(info => info.messageCount > 0) // Only show geohashes with actual messages
+      .sort((a, b) => b.messageCount - a.messageCount);
+  }, [eventsByGeohash]);
+
+  const totalMessages = allEvents.filter(e => e.message && e.message.trim().length > 0).length;
+  const heartbeatCount = allEvents.length - totalMessages;
+
+  return (
+    <div className="min-w-[250px] max-w-[300px] bg-black/90 text-green-400 border border-cyan-500/50 rounded-lg p-3 font-mono text-xs">
+      <div className="flex items-center gap-2 mb-2 text-cyan-400">
+        <Activity className="h-3 w-3" />
+        <span className="font-bold">BITCHAT CLUSTER</span>
+      </div>
+
+      <div className="text-gray-300 text-[10px] mb-2">
+        {geohashInfos.length} {geohashInfos.length === 1 ? 'location' : 'locations'}
+        {heartbeatCount > 0 && ` • ${heartbeatCount} active`}
+      </div>
+
+      {geohashInfos.length === 0 ? (
+        <div className="text-sm text-gray-400 py-2">
+          {heartbeatCount} {heartbeatCount === 1 ? 'user has' : 'users have'} Bitchat open nearby
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-48 overflow-y-auto">
+          {geohashInfos.map(({ geohash, messageCount, userCount, latestMessage }) => (
+            <button
+              key={geohash}
+              onClick={() => onOpenChat(geohash, eventsByGeohash.get(geohash) || [])}
+              className="w-full text-left p-2 rounded bg-gray-900/50 border border-gray-700 hover:bg-gray-800/50 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="min-w-0">
+                  <div className="font-medium text-sm text-yellow-400 font-mono truncate">
+                    {geohash.substring(0, 6)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-[10px] text-blue-400">{userCount} users</span>
+                  {messageCount > 0 && (
+                    <span className="text-[10px] text-green-400">{messageCount} msgs</span>
+                  )}
+                </div>
+              </div>
+              {latestMessage && (
+                <p className="text-xs text-gray-400 line-clamp-1 mt-1">
+                  {latestMessage.nickname && <span className="font-medium">{latestMessage.nickname}: </span>}
+                  {latestMessage.message}
+                </p>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
 
 const EventPopup = React.memo(({ point, onOpenChat }: {
   point: HeatMapPoint;
@@ -403,6 +584,49 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
 
   const maxIntensity = Math.max(...heatMapPoints.map(p => p.intensity), 1);
 
+  // Get current map zoom level for clustering decision
+  const [zoom, setZoom] = useState(3);
+  const shouldCluster = zoom < DISABLE_CLUSTERING_AT_ZOOM;
+
+  // Update zoom level when map changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const map = mapRef.current;
+    setZoom(map.getZoom());
+
+    const handleZoom = () => {
+      setZoom(map.getZoom());
+    };
+
+    map.on('zoomend', handleZoom);
+
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
+  }, [mapRef]);
+
+  // Cluster markers when zoomed out
+  const clusteredPoints = useMemo(() => {
+    if (!shouldCluster || heatMapPoints.length <= 1 || !mapRef.current) {
+      return heatMapPoints.map((point, idx) => ({
+        isCluster: false,
+        point,
+        cluster: null as ClusteredMarker | null,
+        key: `point-${idx}-${point.lat}-${point.lng}`
+      }));
+    }
+
+    const clusters = clusterMarkers(heatMapPoints, mapRef.current, CLUSTER_RADIUS_PX);
+
+    return clusters.map((cluster, idx) => ({
+      isCluster: cluster.markers.length > 1,
+      point: cluster.markers.length === 1 ? cluster.markers[0] : null,
+      cluster: cluster.markers.length > 1 ? cluster : null,
+      key: `cluster-${idx}-${cluster.id}`
+    }));
+  }, [heatMapPoints, shouldCluster, zoom, mapRef]);
+
   // Chat dialog handlers
   const handleOpenChat = (geohash: string, events: EphemeralEventData[]) => {
     setSelectedGeohash(geohash);
@@ -528,48 +752,85 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
           maxZoom={19}
         />
 
-        {/* Render heat map points */}
-        {heatMapPoints.map((point, index) => {
-          const isHeartbeat = !point.hasMessages;
-          const color = getIntensityColor(point.intensity, maxIntensity, isHeartbeat);
-          const radius = getIntensityRadius(point.intensity, maxIntensity, isHeartbeat);
+        {/* Render clustered or individual heat map points */}
+        {clusteredPoints.map(({ isCluster, point, cluster, key }) => {
+          if (isCluster && cluster) {
+            // Render cluster
+            const isHeartbeat = !cluster.hasAnyMessages;
+            const color = getIntensityColor(cluster.totalIntensity, maxIntensity, isHeartbeat);
+            const radius = Math.max(12, Math.min(30, 12 + cluster.markers.length * 2));
 
-          return (
-            <CircleMarker
-              key={`heatpoint-${index}-${point.lat}-${point.lng}`}
-              center={[point.lat, point.lng]}
-              radius={radius}
-              pathOptions={{
-                color: color,
-                fillColor: color,
-                fillOpacity: isHeartbeat ? 0.3 : 0.6,
-                weight: isHeartbeat ? 1 : 2,
-                opacity: isHeartbeat ? 0.5 : 0.8,
-                className: isHeartbeat ? 'marker-pulse' : '',
-              }}
-              eventHandlers={{
-                click: (e) => {
-                  const latestEvent = point.events[0];
-                  if (latestEvent.geohash) {
-                    setHighlightedGeohash(latestEvent.geohash);
-                  }
-                  e.target.openPopup();
-                }
-              }}
-            >
-              <Popup
-                closeOnClick={true}
-                autoClose={true}
+            return (
+              <CircleMarker
+                key={key}
+                center={[cluster.coordinates[1], cluster.coordinates[0]]}
+                radius={radius}
+                pathOptions={{
+                  color: color,
+                  fillColor: color,
+                  fillOpacity: isHeartbeat ? 0.4 : 0.7,
+                  weight: 2,
+                  opacity: isHeartbeat ? 0.6 : 0.9,
+                  className: isHeartbeat ? 'marker-pulse' : '',
+                }}
                 eventHandlers={{
-                  remove: () => {
-                    setHighlightedGeohash(null);
+                  click: (e) => {
+                    e.target.openPopup();
                   }
                 }}
               >
-                <EventPopup point={point} onOpenChat={handleOpenChat} />
-              </Popup>
-            </CircleMarker>
-          );
+                <Popup
+                  closeOnClick={true}
+                  autoClose={true}
+                >
+                  <ClusterPopup cluster={cluster} onOpenChat={handleOpenChat} />
+                </Popup>
+              </CircleMarker>
+            );
+          } else if (point) {
+            // Render individual point
+            const isHeartbeat = !point.hasMessages;
+            const color = getIntensityColor(point.intensity, maxIntensity, isHeartbeat);
+            const radius = getIntensityRadius(point.intensity, maxIntensity, isHeartbeat);
+
+            return (
+              <CircleMarker
+                key={key}
+                center={[point.lat, point.lng]}
+                radius={radius}
+                pathOptions={{
+                  color: color,
+                  fillColor: color,
+                  fillOpacity: isHeartbeat ? 0.3 : 0.6,
+                  weight: isHeartbeat ? 1 : 2,
+                  opacity: isHeartbeat ? 0.5 : 0.8,
+                  className: isHeartbeat ? 'marker-pulse' : '',
+                }}
+                eventHandlers={{
+                  click: (e) => {
+                    const latestEvent = point.events[0];
+                    if (latestEvent.geohash) {
+                      setHighlightedGeohash(latestEvent.geohash);
+                    }
+                    e.target.openPopup();
+                  }
+                }}
+              >
+                <Popup
+                  closeOnClick={true}
+                  autoClose={true}
+                  eventHandlers={{
+                    remove: () => {
+                      setHighlightedGeohash(null);
+                    }
+                  }}
+                >
+                  <EventPopup point={point} onOpenChat={handleOpenChat} />
+                </Popup>
+              </CircleMarker>
+            );
+          }
+          return null;
         })}
 
         {/* Render geohash highlight */}
