@@ -6,6 +6,7 @@ import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
 import { decode } from 'ngeohash';
 import { useDisabledRelays } from '@/hooks/useDisabledRelays';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useState, useEffect } from 'react';
 
 export interface EphemeralEventData {
   event: NostrEvent;
@@ -41,12 +42,32 @@ function transformEphemeralEvent(event: NostrEvent): EphemeralEventData {
 // 1 hour in seconds for message time limit
 const ONE_HOUR_SECONDS = 60 * 60;
 
+// Progress tracking state
+let relayConnectionProgress = {
+  connectedRelays: [] as string[],
+  totalRelays: 0,
+};
+
+// Global setter for updating progress from within queryFn
+let updateProgress: ((relays: string[], total: number) => void) | null = null;
+
 export function useEphemeralEvents(targetGeohash?: string) {
   const { nostr } = useNostr();
   const { getEnabledRelays } = useDisabledRelays();
   const [geoRelayPoolSize] = useLocalStorage<number>('bitmap:geoRelayPoolSize', 16);
+  const [connectionProgress, setConnectionProgress] = useState({ connectedRelays: [] as string[], totalRelays: 0 });
 
-  return useQuery({
+  // Set up the global updater
+  useEffect(() => {
+    updateProgress = (relays: string[], total: number) => {
+      setConnectionProgress({ connectedRelays: relays, totalRelays: total });
+    };
+    return () => {
+      updateProgress = null;
+    };
+  }, []);
+
+  const query = useQuery({
     queryKey: ['ephemeral-events', targetGeohash],
     queryFn: async (c) => {
       const signal = AbortSignal.any([c.signal, AbortSignal.timeout(60000)]); // 1 minute timeout
@@ -122,6 +143,15 @@ export function useEphemeralEvents(targetGeohash?: string) {
                    getEnabledRelays([relay.url]).length > 0
         );
 
+        // Track connected relays
+        const connectedRelays: string[] = [...enabledDefaultRelays];
+        const totalRelays = enabledDefaultRelays.length + availableRegionalRelays.length;
+
+        // Update initial progress
+        if (updateProgress) {
+          updateProgress(connectedRelays, totalRelays);
+        }
+
         // Process geographic relays in batches of 4
         const batchSize = 4;
         for (let i = 0; i < availableRegionalRelays.length; i += batchSize) {
@@ -134,6 +164,13 @@ export function useEphemeralEvents(targetGeohash?: string) {
                 nostr.query([{ kinds: [20000, 20001], since: oneHourAgo, limit: 200 }], {
                   signal: AbortSignal.timeout(8000),
                   relays: [relayUrl]
+                }).then(events => {
+                  // Track successful connection
+                  connectedRelays.push(relayUrl);
+                  if (updateProgress) {
+                    updateProgress([...connectedRelays], totalRelays);
+                  }
+                  return events;
                 }).catch(error => {
                   console.warn(`❌ Geographic relay ${relayUrl} failed:`, error.message);
                   failedRelays.add(relayUrl);
@@ -172,4 +209,9 @@ export function useEphemeralEvents(targetGeohash?: string) {
     staleTime: 5000, // Consider data stale after 5 seconds
     placeholderData: (previousData) => previousData, // Keep showing previous data while fetching
   });
+
+  return {
+    ...query,
+    connectionProgress,
+  };
 }
