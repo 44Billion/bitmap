@@ -234,43 +234,8 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
                       </span>
                     </div>
 
-                    {/* Custom styled slider */}
+                    {/* Terminal-styled slider */}
                     <div className="relative pt-2 pb-1">
-                      <style>{`
-                        .bitmap-slider [data-radix-slider-track] {
-                          background: rgba(0, 0, 0, 0.5);
-                          border: 1px solid rgba(34, 211, 238, 0.3);
-                          height: 6px;
-                          border-radius: 2px;
-                        }
-                        .bitmap-slider [data-radix-slider-range] {
-                          background: linear-gradient(90deg, #00ff41 0%, #ffff00 30%, #ff8c00 60%, #ff0000 100%);
-                          box-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
-                          border-radius: 2px;
-                        }
-                        .bitmap-slider [data-radix-slider-thumb] {
-                          background: #000;
-                          border: 2px solid #22d3ee;
-                          box-shadow: 0 0 12px rgba(34, 211, 238, 0.6), inset 0 0 4px rgba(34, 211, 238, 0.3);
-                          width: 18px;
-                          height: 18px;
-                          border-radius: 2px;
-                          transition: all 0.2s ease;
-                          cursor: pointer;
-                        }
-                        .bitmap-slider [data-radix-slider-thumb]:hover {
-                          box-shadow: 0 0 18px rgba(34, 211, 238, 0.9), inset 0 0 6px rgba(34, 211, 238, 0.5);
-                          border-color: #06b6d4;
-                        }
-                        .bitmap-slider [data-radix-slider-thumb]:focus {
-                          outline: none;
-                          box-shadow: 0 0 24px rgba(34, 211, 238, 1), inset 0 0 8px rgba(34, 211, 238, 0.6);
-                          border-color: #06b6d4;
-                        }
-                        .bitmap-slider [data-radix-slider-thumb]:active {
-                          transform: scale(1.1);
-                        }
-                      `}</style>
                       <Slider
                         value={[geoRelayPoolSize]}
                         onValueChange={(values) => setGeoRelayPoolSize(values[0])}
