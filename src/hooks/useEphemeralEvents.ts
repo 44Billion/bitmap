@@ -14,8 +14,8 @@ export interface EphemeralEventData {
 }
 
 function validateEphemeralEvent(event: NostrEvent): boolean {
-  // Check if it's an ephemeral event
-  if (event.kind !== 20000) return false;
+  // Check if it's an ephemeral event (kind 20000 or 20001)
+  if (event.kind !== 20000 && event.kind !== 20001) return false;
 
   // Must have a geohash tag to be useful for the heat map
   const geohash = event.tags.find(([name]) => name === 'g')?.[1];
@@ -37,6 +37,9 @@ function transformEphemeralEvent(event: NostrEvent): EphemeralEventData {
   };
 }
 
+// 1 hour in seconds for message time limit
+const ONE_HOUR_SECONDS = 60 * 60;
+
 export function useEphemeralEvents(targetGeohash?: string) {
   const { nostr } = useNostr();
   const { getEnabledRelays } = useDisabledRelays();
@@ -44,15 +47,18 @@ export function useEphemeralEvents(targetGeohash?: string) {
   return useQuery({
     queryKey: ['ephemeral-events', targetGeohash],
     queryFn: async (c) => {
-      const signal = AbortSignal.any([c.signal, AbortSignal.timeout(120000)]); // Increased timeout to 2 minutes for more comprehensive loading
+      const signal = AbortSignal.any([c.signal, AbortSignal.timeout(60000)]); // 1 minute timeout
+      const oneHourAgo = Math.floor(Date.now() / 1000) - ONE_HOUR_SECONDS;
 
       if (targetGeohash) {
-        // CHAT MODE: Find closest relays for chat
+        // CHAT MODE: Query for specific geohash from closest relays
         try {
           const geoRelays = await fetchGeoRelays();
-          const { latitude, longitude } = decode(targetGeohash);
-          const closestRelays = findClosestRelays(geoRelays, latitude, longitude, 8); // Use 8 closest relays for better coverage
-          const closestRelayUrls = closestRelays.map(relay => relay.url);
+          // Decode geohash to get coordinates (for potential future use with findClosestRelays)
+          decode(targetGeohash);
+          const closestRelayUrls = geoRelays
+            .slice(0, 8) // Use first 8 relays
+            .map(relay => relay.url);
           const enabledClosestRelays = getEnabledRelays(closestRelayUrls);
 
           if (enabledClosestRelays.length === 0) {
@@ -60,39 +66,38 @@ export function useEphemeralEvents(targetGeohash?: string) {
             if (fallbackRelays.length === 0) {
               return [];
             }
-            const events = await nostr.query([{ kinds: [20000], limit: 500 }], { signal, relays: fallbackRelays });
+            const events = await nostr.query([{ kinds: [20000, 20001], since: oneHourAgo, limit: 500 }], { signal, relays: fallbackRelays });
             return events.filter(validateEphemeralEvent).map(transformEphemeralEvent);
           }
 
-          // Simple chat mode query
-          const events = await nostr.query([{ kinds: [20000], limit: 500 }], { signal, relays: enabledClosestRelays });
+          const events = await nostr.query([{ kinds: [20000, 20001], since: oneHourAgo, limit: 500 }], { signal, relays: enabledClosestRelays });
           return events.filter(validateEphemeralEvent).map(transformEphemeralEvent);
         } catch (error) {
-          console.error('❌ Failed to fetch geo relays for chat, using defaults:', error);
+          console.error('❌ Failed to fetch events for geohash:', error);
           const fallbackRelays = getEnabledRelays(['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net']);
           if (fallbackRelays.length === 0) {
             return [];
           }
-          const events = await nostr.query([{ kinds: [20000], limit: 500 }], { signal, relays: fallbackRelays });
+          const events = await nostr.query([{ kinds: [20000, 20001], since: oneHourAgo, limit: 500 }], { signal, relays: fallbackRelays });
           return events.filter(validateEphemeralEvent).map(transformEphemeralEvent);
         }
       }
 
+      // GLOBAL MODE: Query from default relays + rotating geographic relays
       const allDefaultRelays = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
       const enabledDefaultRelays = getEnabledRelays(allDefaultRelays);
       const allEvents: NostrEvent[] = [];
       const failedRelays = new Set<string>();
 
-      // Phase 1: Quick load from default relays (render map ASAP)
+      // Phase 1: Quick load from default relays
       try {
         if (enabledDefaultRelays.length === 0) {
           console.warn('⚠️ No default relays enabled - skipping Phase 1');
         } else {
-          const defaultEvents = await nostr.query([{ kinds: [20000], limit: 300 }], {
-            signal: AbortSignal.timeout(8000), // Short timeout for fast initial load
+          const defaultEvents = await nostr.query([{ kinds: [20000, 20001], since: oneHourAgo, limit: 300 }], {
+            signal: AbortSignal.timeout(8000),
             relays: enabledDefaultRelays
           });
-
           allEvents.push(...defaultEvents);
         }
       } catch (error) {
@@ -108,14 +113,14 @@ export function useEphemeralEvents(targetGeohash?: string) {
         const rotationIndex = Math.floor(Date.now() / 300000) % geoRelays.length;
         const selectedRegionalRelays = geoRelays.slice(rotationIndex, rotationIndex + 8);
 
-        // Filter out failed default relays, disabled relays, and duplicates
+        // Filter out failed default relays and duplicates
         const availableRegionalRelays = selectedRegionalRelays.filter(
           relay => !failedRelays.has(relay.url) &&
                    !allDefaultRelays.includes(relay.url) &&
                    getEnabledRelays([relay.url]).length > 0
         );
 
-        // Process geographic relays in batches of 4 for better throughput
+        // Process geographic relays in batches of 4
         const batchSize = 4;
         for (let i = 0; i < availableRegionalRelays.length; i += batchSize) {
           const batch = availableRegionalRelays.slice(i, i + batchSize);
@@ -124,7 +129,7 @@ export function useEphemeralEvents(targetGeohash?: string) {
           try {
             const batchEvents = await Promise.allSettled(
               batchRelayUrls.map(relayUrl =>
-                nostr.query([{ kinds: [20000], limit: 200 }], {
+                nostr.query([{ kinds: [20000, 20001], since: oneHourAgo, limit: 200 }], {
                   signal: AbortSignal.timeout(8000),
                   relays: [relayUrl]
                 }).catch(error => {
@@ -142,73 +147,16 @@ export function useEphemeralEvents(targetGeohash?: string) {
               }
             });
 
-            // Small delay between batches to avoid rate limiting
+            // Small delay between batches
             if (i + batchSize < availableRegionalRelays.length) {
               await new Promise(resolve => setTimeout(resolve, 200));
             }
           } catch {
-            // Mark all relays in this batch as failed
             batchRelayUrls.forEach(url => failedRelays.add(url));
           }
         }
       } catch (geoError) {
         console.error('❌ Phase 2 geographic loading failed:', geoError);
-      }
-
-      // Phase 3: Backup relay rotation for failed connections (max 5 relays)
-      if (failedRelays.size > 0) {
-        try {
-          const geoRelays = await fetchGeoRelays();
-          const failedRelayArray = Array.from(failedRelays);
-
-          // Find backup relays from the same regions as failed ones
-          const backupRelays: string[] = [];
-
-          for (const failedRelayUrl of failedRelayArray.slice(0, 5)) { // Limit to 5 failed relays
-            const failedRelay = geoRelays.find(r => r.url === failedRelayUrl);
-            if (failedRelay) {
-              // Find relays from same region that haven't been tried yet
-              const regionRelays = geoRelays.filter(r =>
-                Math.abs(r.latitude - failedRelay.latitude) < 10 &&
-                Math.abs(r.longitude - failedRelay.longitude) < 10 &&
-                !failedRelays.has(r.url) &&
-                !backupRelays.includes(r.url) &&
-                !allDefaultRelays.includes(r.url)
-              );
-
-              // Take up to 2 backup relays per failed relay
-              regionRelays.slice(0, 2).forEach(backup => {
-                backupRelays.push(backup.url);
-              });
-            }
-          }
-
-          // Limit to max 5 backup relays total
-          const limitedBackupRelays = backupRelays.slice(0, 5);
-
-          if (limitedBackupRelays.length > 0) {
-            const backupEvents = await Promise.allSettled(
-              limitedBackupRelays.map(relayUrl =>
-                nostr.query([{ kinds: [20000], limit: 100 }], {
-                  signal: AbortSignal.timeout(5000),
-                  relays: [relayUrl]
-                }).catch(error => {
-                  console.warn(`❌ Backup relay ${relayUrl} also failed:`, error.message);
-                  return [];
-                })
-              )
-            );
-
-            // Add successful backup results
-            backupEvents.forEach(result => {
-              if (result.status === 'fulfilled') {
-                allEvents.push(...result.value);
-              }
-            });
-          }
-        } catch (rotationError) {
-          console.error('❌ Phase 3 relay rotation failed:', rotationError);
-        }
       }
 
       // Deduplicate events by ID
@@ -220,5 +168,6 @@ export function useEphemeralEvents(targetGeohash?: string) {
     },
     refetchInterval: 10000, // Refetch every 10 seconds for real-time updates
     staleTime: 5000, // Consider data stale after 5 seconds
+    placeholderData: (previousData) => previousData, // Keep showing previous data while fetching
   });
 }

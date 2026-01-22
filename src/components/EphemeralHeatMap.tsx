@@ -23,6 +23,7 @@ interface HeatMapPoint {
   lng: number;
   intensity: number;
   events: EphemeralEventData[];
+  hasMessages: boolean; // true if any event has a message (not just heartbeat)
 }
 
 // Custom zoom controls component
@@ -128,12 +129,16 @@ const EventPopup = React.memo(({ point, onOpenChat }: {
 }) => {
   const latestEvent = point.events[0];
   const eventCount = point.events.length;
+  const messagesWithContent = point.events.filter(e => e.message && e.message.trim().length > 0);
+  const isHeartbeatOnly = messagesWithContent.length === 0;
 
   return (
     <div className="min-w-[250px] max-w-[300px] bg-black/90 text-green-400 border border-cyan-500/50 rounded-lg p-3 font-mono text-xs">
       <div className="flex items-center gap-2 mb-2 text-cyan-400">
         <Activity className="h-3 w-3" />
-        <span className="font-bold">BITCHAT DETECTED</span>
+        <span className="font-bold">
+          {isHeartbeatOnly ? 'BITCHAT HEARTBEAT DETECTED' : 'BITCHAT DETECTED'}
+        </span>
       </div>
 
       <div className="space-y-2">
@@ -162,16 +167,21 @@ const EventPopup = React.memo(({ point, onOpenChat }: {
           </div>
         )}
 
-        <div className="bg-gray-900/50 p-2 rounded border border-gray-700">
-          <div className="text-yellow-400 text-[10px] mb-1">LATEST TRANSMISSION:</div>
-          <div className="text-gray-200 break-words">
-            {latestEvent.message || '[ENCRYPTED]'}
+        {!isHeartbeatOnly && messagesWithContent[0] && (
+          <div className="bg-gray-900/50 p-2 rounded border border-gray-700">
+            <div className="text-yellow-400 text-[10px] mb-1">LATEST TRANSMISSION:</div>
+            <div className="text-gray-200 break-words">
+              {messagesWithContent[0].message}
+            </div>
           </div>
-        </div>
+        )}
 
         {eventCount > 1 && (
           <div className="text-orange-400 text-[10px]">
-            +{eventCount - 1} additional bitchats detected
+            {isHeartbeatOnly
+              ? `${eventCount} heartbeat${eventCount === 1 ? '' : 's'} detected`
+              : `+${eventCount - 1} additional bitchat${eventCount - 1 === 1 ? '' : 's'} detected`
+            }
           </div>
         )}
 
@@ -331,11 +341,13 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     geohashGroups.forEach((groupEvents, geohash) => {
       try {
         const { latitude, longitude } = decode(geohash);
+        const hasMessages = groupEvents.some(e => e.message && e.message.trim().length > 0);
         points.push({
           lat: latitude,
           lng: longitude,
           intensity: groupEvents.length,
           events: groupEvents.sort((a, b) => b.event.created_at - a.event.created_at), // Sort by newest first
+          hasMessages,
         });
       } catch (error) {
         console.warn('Invalid geohash:', geohash, error);
@@ -350,8 +362,12 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     return points;
   }, [filteredEvents, events]);
 
-  // Calculate intensity colors (hacker green to red scale)
-  const getIntensityColor = (intensity: number, maxIntensity: number) => {
+  // Calculate intensity colors (hacker green to red scale for messages, pale blue for heartbeats)
+  const getIntensityColor = (intensity: number, maxIntensity: number, isHeartbeat: boolean) => {
+    if (isHeartbeat) {
+      return '#38bdf8'; // Pale sky blue for heartbeat-only
+    }
+
     const ratio = intensity / Math.max(maxIntensity, 1);
 
     if (ratio < 0.3) return '#00ff41'; // Matrix green
@@ -360,7 +376,11 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
     return '#ff0000'; // Red critical
   };
 
-  const getIntensityRadius = (intensity: number, maxIntensity: number) => {
+  const getIntensityRadius = (intensity: number, maxIntensity: number, isHeartbeat: boolean) => {
+    if (isHeartbeat) {
+      return 6; // Smaller radius for heartbeat-only
+    }
+
     const ratio = intensity / Math.max(maxIntensity, 1);
     return Math.max(8, Math.min(25, 8 + ratio * 17));
   };
@@ -493,41 +513,48 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         />
 
         {/* Render heat map points */}
-        {heatMapPoints.map((point, index) => (
-          <CircleMarker
-            key={`heatpoint-${index}-${point.lat}-${point.lng}`}
-            center={[point.lat, point.lng]}
-            radius={getIntensityRadius(point.intensity, maxIntensity)}
-            pathOptions={{
-              color: getIntensityColor(point.intensity, maxIntensity),
-              fillColor: getIntensityColor(point.intensity, maxIntensity),
-              fillOpacity: 0.6,
-              weight: 2,
-              opacity: 0.8,
-            }}
-            eventHandlers={{
-              click: (e) => {
-                const latestEvent = point.events[0];
-                if (latestEvent.geohash) {
-                  setHighlightedGeohash(latestEvent.geohash);
-                }
-                e.target.openPopup();
-              }
-            }}
-          >
-            <Popup
-              closeOnClick={true}
-              autoClose={true}
+        {heatMapPoints.map((point, index) => {
+          const isHeartbeat = !point.hasMessages;
+          const color = getIntensityColor(point.intensity, maxIntensity, isHeartbeat);
+          const radius = getIntensityRadius(point.intensity, maxIntensity, isHeartbeat);
+
+          return (
+            <CircleMarker
+              key={`heatpoint-${index}-${point.lat}-${point.lng}`}
+              center={[point.lat, point.lng]}
+              radius={radius}
+              pathOptions={{
+                color: color,
+                fillColor: color,
+                fillOpacity: isHeartbeat ? 0.3 : 0.6,
+                weight: isHeartbeat ? 1 : 2,
+                opacity: isHeartbeat ? 0.5 : 0.8,
+                className: isHeartbeat ? 'marker-pulse' : '',
+              }}
               eventHandlers={{
-                remove: () => {
-                  setHighlightedGeohash(null);
+                click: (e) => {
+                  const latestEvent = point.events[0];
+                  if (latestEvent.geohash) {
+                    setHighlightedGeohash(latestEvent.geohash);
+                  }
+                  e.target.openPopup();
                 }
               }}
             >
-              <EventPopup point={point} onOpenChat={handleOpenChat} />
-            </Popup>
-          </CircleMarker>
-        ))}
+              <Popup
+                closeOnClick={true}
+                autoClose={true}
+                eventHandlers={{
+                  remove: () => {
+                    setHighlightedGeohash(null);
+                  }
+                }}
+              >
+                <EventPopup point={point} onOpenChat={handleOpenChat} />
+              </Popup>
+            </CircleMarker>
+          );
+        })}
 
         {/* Render geohash highlight */}
         <GeohashHighlight geohash={highlightedGeohash} />
