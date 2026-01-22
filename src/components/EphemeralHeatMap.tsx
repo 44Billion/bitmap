@@ -209,13 +209,8 @@ const EventPopup = React.memo(({ point, onOpenChat }: {
 
 export function EphemeralHeatMap({ className }: { className?: string }) {
   const [selectedGeohash, setSelectedGeohash] = useState<string | null>(null);
-  const { data: globalEvents, isLoading: globalLoading, error: globalError, isFetching: globalFetching, connectionProgress: globalProgress } = useEphemeralEvents(undefined);
+  const { data: globalEvents, isLoading: globalLoading, error: globalError, isFetching: globalFetching } = useEphemeralEvents(undefined);
   const { data: chatEvents } = useEphemeralEvents(selectedGeohash || undefined);
-
-  // Log whenever globalProgress changes
-  useEffect(() => {
-    console.log('🔄 globalProgress changed:', globalProgress);
-  }, [globalProgress]);
 
   // Use appropriate events data based on context
   const events = selectedGeohash ? chatEvents : globalEvents;
@@ -480,39 +475,11 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
   };
 
   if (showLoadingOverlay) {
-    const hasProgress = globalProgress && globalProgress.totalRelays > 0;
-    console.log('🔍 Loading overlay shown, hasProgress:', hasProgress, 'globalProgress:', globalProgress);
     return (
       <div className={cn("bg-black flex items-center justify-center", className)}>
-        <div className="text-center text-cyan-400 font-mono space-y-3">
+        <div className="text-center text-cyan-400 font-mono">
           <Activity className="h-8 w-8 mx-auto mb-2 animate-pulse" />
           <div className="text-sm">LOADING BITMAP...</div>
-          {hasProgress ? (
-            <div className="space-y-2">
-              <div className="text-xs text-green-400">
-                CONNECTED: {globalProgress.connectedRelays.length} / {globalProgress.totalRelays} RELAYS
-              </div>
-              <div className="max-w-md mx-auto bg-black/50 border border-cyan-500/30 rounded p-2">
-                <div className="text-[10px] text-gray-400 max-h-32 overflow-y-auto space-y-1">
-                  {globalProgress.connectedRelays.slice(-8).map((relay, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <span className="text-green-400">✓</span>
-                      <span className="truncate">{relay.replace(/^wss?:\/\//, '')}</span>
-                    </div>
-                  ))}
-                  {globalProgress.connectedRelays.length > 8 && (
-                    <div className="text-gray-600 italic">
-                      ... and {globalProgress.connectedRelays.length - 8} more
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-xs text-gray-500">
-              Initializing relay connections...
-            </div>
-          )}
         </div>
       </div>
     );
