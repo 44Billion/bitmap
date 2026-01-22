@@ -201,6 +201,108 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
               <span className="text-xs text-gray-500">({geoRelays.length} total)</span>
             </div>
 
+            {/* Global Georelay Pool Size Setting - Collapsible */}
+            <Collapsible open={isPoolSettingsOpen} onOpenChange={setIsPoolSettingsOpen}>
+              <div className="space-y-2 py-2">
+                <CollapsibleTrigger asChild>
+                  <button className="w-full flex items-center justify-between bg-black/40 border border-cyan-500/30 rounded-lg p-2 sm:p-3 hover:bg-cyan-500/10 transition-colors group">
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-cyan-400" />
+                      <span className="text-cyan-400 font-mono text-sm font-medium">
+                        GLOBAL GEORELAY POOL SIZE
+                      </span>
+                      <span className="text-xs px-2 py-1 rounded font-mono bg-cyan-500/10 text-cyan-400">
+                        {geoRelayPoolSize} relays
+                      </span>
+                    </div>
+                    {isPoolSettingsOpen ? (
+                      <ChevronUp className="h-4 w-4 text-cyan-400 group-hover:text-cyan-300" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-cyan-400 group-hover:text-cyan-300" />
+                    )}
+                  </button>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent>
+                  <div className="space-y-3 bg-black/40 border border-cyan-500/20 rounded-lg p-3 sm:p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-400 font-mono">
+                        Relays in rotation: <span className="text-cyan-400 font-bold">{geoRelayPoolSize}</span>
+                      </span>
+                      <span className="text-xs text-gray-500 font-mono">
+                        (rotates every 5 min)
+                      </span>
+                    </div>
+
+                    {/* Custom styled slider */}
+                    <div className="relative pt-2 pb-1">
+                      <style>{`
+                        .bitmap-slider [data-radix-slider-track] {
+                          background: rgba(0, 255, 65, 0.1);
+                          height: 8px;
+                        }
+                        .bitmap-slider [data-radix-slider-range] {
+                          background: linear-gradient(90deg, #00ff41 0%, #ffff00 30%, #ff8c00 60%, #ff0000 100%);
+                        }
+                        .bitmap-slider [data-radix-slider-thumb] {
+                          background: #000;
+                          border: 2px solid #22d3ee;
+                          box-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+                          width: 20px;
+                          height: 20px;
+                          transition: box-shadow 0.2s ease;
+                        }
+                        .bitmap-slider [data-radix-slider-thumb]:hover {
+                          box-shadow: 0 0 15px rgba(34, 211, 238, 0.8);
+                        }
+                        .bitmap-slider [data-radix-slider-thumb]:focus {
+                          outline: none;
+                          box-shadow: 0 0 20px rgba(34, 211, 238, 1);
+                        }
+                      `}</style>
+                      <Slider
+                        value={[geoRelayPoolSize]}
+                        onValueChange={(values) => setGeoRelayPoolSize(values[0])}
+                        min={8}
+                        max={64}
+                        step={8}
+                        className="bitmap-slider w-full"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-green-400">8</span>
+                      <span className="text-green-400">16</span>
+                      <span className="text-yellow-400">24</span>
+                      <span className="text-orange-400">32</span>
+                      <span className="text-red-400">40</span>
+                      <span className="text-red-400">48</span>
+                      <span className="text-red-400">56</span>
+                      <span className="text-red-400">64</span>
+                    </div>
+
+                    {geoRelayPoolSize > 32 && (
+                      <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded p-2 sm:p-3">
+                        <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5 animate-pulse" />
+                        <div className="space-y-1">
+                          <div className="text-xs text-red-400 font-mono font-bold">
+                            WARNING: HIGH RELAY COUNT
+                          </div>
+                          <div className="text-xs text-red-300/90 font-mono">
+                            Connecting to {geoRelayPoolSize} relays simultaneously may impact performance and increase bandwidth usage. Recommended: 16-24 relays for optimal balance.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="text-xs text-gray-400 font-mono leading-relaxed">
+                      Higher values increase global coverage but may impact performance. The app rotates through different geographic relays every 5 minutes to discover messages worldwide.
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+
             {isLoading ? (
               <div className="space-y-3">
                 {/* Skeleton loading for regions */}
@@ -367,108 +469,6 @@ export function RelayListModal({ isOpen, onOpenChange }: RelayListModalProps) {
               </div>
             )}
           </div>
-
-          {/* Global Georelay Pool Size Setting - Collapsible */}
-          <Collapsible open={isPoolSettingsOpen} onOpenChange={setIsPoolSettingsOpen}>
-            <div className="space-y-2">
-              <CollapsibleTrigger asChild>
-                <button className="w-full flex items-center justify-between bg-black/40 border border-cyan-500/30 rounded-lg p-2 sm:p-3 hover:bg-cyan-500/10 transition-colors group">
-                  <div className="flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-cyan-400" />
-                    <span className="text-cyan-400 font-mono text-sm font-medium">
-                      GLOBAL GEORELAY POOL SIZE
-                    </span>
-                    <span className="text-xs px-2 py-1 rounded font-mono bg-cyan-500/10 text-cyan-400">
-                      {geoRelayPoolSize} relays
-                    </span>
-                  </div>
-                  {isPoolSettingsOpen ? (
-                    <ChevronUp className="h-4 w-4 text-cyan-400 group-hover:text-cyan-300" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-cyan-400 group-hover:text-cyan-300" />
-                  )}
-                </button>
-              </CollapsibleTrigger>
-
-              <CollapsibleContent>
-                <div className="space-y-3 bg-black/40 border border-cyan-500/20 rounded-lg p-3 sm:p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-400 font-mono">
-                      Relays in rotation: <span className="text-cyan-400 font-bold">{geoRelayPoolSize}</span>
-                    </span>
-                    <span className="text-xs text-gray-500 font-mono">
-                      (rotates every 5 min)
-                    </span>
-                  </div>
-
-                  {/* Custom styled slider */}
-                  <div className="relative pt-2 pb-1">
-                    <style>{`
-                      .bitmap-slider [data-radix-slider-track] {
-                        background: rgba(0, 255, 65, 0.1);
-                        height: 8px;
-                      }
-                      .bitmap-slider [data-radix-slider-range] {
-                        background: linear-gradient(90deg, #00ff41 0%, #ffff00 30%, #ff8c00 60%, #ff0000 100%);
-                      }
-                      .bitmap-slider [data-radix-slider-thumb] {
-                        background: #000;
-                        border: 2px solid #22d3ee;
-                        box-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
-                        width: 20px;
-                        height: 20px;
-                        transition: box-shadow 0.2s ease;
-                      }
-                      .bitmap-slider [data-radix-slider-thumb]:hover {
-                        box-shadow: 0 0 15px rgba(34, 211, 238, 0.8);
-                      }
-                      .bitmap-slider [data-radix-slider-thumb]:focus {
-                        outline: none;
-                        box-shadow: 0 0 20px rgba(34, 211, 238, 1);
-                      }
-                    `}</style>
-                    <Slider
-                      value={[geoRelayPoolSize]}
-                      onValueChange={(values) => setGeoRelayPoolSize(values[0])}
-                      min={8}
-                      max={64}
-                      step={8}
-                      className="bitmap-slider w-full"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-green-400">8</span>
-                    <span className="text-green-400">16</span>
-                    <span className="text-yellow-400">24</span>
-                    <span className="text-orange-400">32</span>
-                    <span className="text-red-400">40</span>
-                    <span className="text-red-400">48</span>
-                    <span className="text-red-400">56</span>
-                    <span className="text-red-400">64</span>
-                  </div>
-
-                  {geoRelayPoolSize > 32 && (
-                    <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded p-2 sm:p-3">
-                      <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5 animate-pulse" />
-                      <div className="space-y-1">
-                        <div className="text-xs text-red-400 font-mono font-bold">
-                          WARNING: HIGH RELAY COUNT
-                        </div>
-                        <div className="text-xs text-red-300/90 font-mono">
-                          Connecting to {geoRelayPoolSize} relays simultaneously may impact performance and increase bandwidth usage. Recommended: 16-24 relays for optimal balance.
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-xs text-gray-400 font-mono leading-relaxed">
-                    Higher values increase global coverage but may impact performance. The app rotates through different geographic relays every 5 minutes to discover messages worldwide.
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </div>
-          </Collapsible>
 
           {/* Summary Statistics */}
           {!isLoading && (
