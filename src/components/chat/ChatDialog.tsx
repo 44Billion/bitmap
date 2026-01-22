@@ -18,13 +18,29 @@ import { useSpamFilter } from '@/contexts/SpamFilterContext';
 
 import type { EphemeralEventMessage } from '@/hooks/useChatSession';
 
+interface InitialEvent {
+  event: {
+    id: string;
+    pubkey: string;
+    created_at: number;
+    kind: number;
+    tags: string[][];
+    content: string;
+    sig: string;
+  };
+  geohash?: string;
+  nickname?: string;
+  message: string;
+}
+
 interface ChatDialogProps {
   isOpen: boolean;
   onClose: () => void;
   geohash: string;
+  initialEvents?: InitialEvent[];
 }
 
-export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
+export function ChatDialog({ isOpen, onClose, geohash, initialEvents = [] }: ChatDialogProps) {
   const [message, setMessage] = useState('');
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
@@ -47,20 +63,45 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previousMessageCountRef = useRef(0);
-  const { session, sendMessage: sendChatMessage, isLoading, updateNickname } = useChatSession(geohash);
   const { user } = useCurrentUser();
   const { resetToDefault } = useUserNickname();
   const { toast } = useToast();
 
-  // Use React Query to get chat messages
-  const { data: chatMessages = [], isLoading: isMessagesLoading } = useQuery<EphemeralEventMessage[]>({
-    queryKey: ['chat-messages', geohash],
-    queryFn: () => {
-      // This will be populated by the useChatSession effect
-      return [];
-    },
-    enabled: !!geohash && isOpen,
-  });
+  // Convert initialEvents to the format expected by useChatSession
+  const initialMessages: EphemeralEventMessage[] = initialEvents.map(e => ({
+    event: e.event,
+    geohash: e.geohash,
+    nickname: e.nickname,
+    message: e.message,
+  }));
+
+  // Handle new message callback for toast notifications
+  const handleNewMessage = useCallback((incomingMessage: EphemeralEventMessage) => {
+    // Get current user pubkey to check if message is from self
+    const currentUserPubkey = user?.pubkey;
+
+    // Only show toast if the message is from someone else
+    if (incomingMessage.event.pubkey !== currentUserPubkey && incomingMessage.message.trim()) {
+      const senderName = incomingMessage.nickname || 'Anonymous';
+      const preview = incomingMessage.message.slice(0, 50) + (incomingMessage.message.length > 50 ? '...' : '');
+
+      toast({
+        title: `New message from ${senderName}`,
+        description: preview,
+      });
+    }
+  }, [user?.pubkey, toast]);
+
+  const {
+    session,
+    sendMessage: sendChatMessage,
+    isLoading,
+    messages: chatMessages,
+    updateNickname,
+    connectionStatus
+  } = useChatSession(geohash, initialMessages, handleNewMessage);
+
+  const isMessagesLoading = isLoading && chatMessages.length === 0;
 
   // Check if user is at bottom of scroll
   const checkIsAtBottom = useCallback(() => {
@@ -315,7 +356,23 @@ export function ChatDialog({ isOpen, onClose, geohash }: ChatDialogProps) {
         <DialogHeader className="border-b border-green-500/20 pb-4">
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2 text-green-400 font-mono text-md sm:text-xl">
-              <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
+              <div className="relative">
+                <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
+                <div
+                  className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-green-500 animate-pulse' :
+                    connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                    connectionStatus === 'error' ? 'bg-red-500' :
+                    'bg-gray-500'
+                  }`}
+                  title={
+                    connectionStatus === 'connected' ? 'Connected' :
+                    connectionStatus === 'connecting' ? 'Connecting...' :
+                    connectionStatus === 'error' ? 'Connection error' :
+                    'Disconnected'
+                  }
+                />
+              </div>
               BITCHAT SESSION
             </DialogTitle>
             <div className="flex items-center gap-2">

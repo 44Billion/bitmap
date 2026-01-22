@@ -641,6 +641,7 @@ export function EphemeralHeatMap({ className }: { className?: string }) {
         isOpen={chatDialog.isOpen}
         onClose={handleCloseChat}
         geohash={chatDialog.geohash}
+        initialEvents={chatDialog.initialEvents}
       />
 
       {/* Teleport Dialog */}

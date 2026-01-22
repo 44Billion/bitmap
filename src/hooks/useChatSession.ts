@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNostr } from '@nostrify/react';
 import { useCurrentUser } from './useCurrentUser';
 import { useEphemeralIdentity } from './useEphemeralIdentity';
 import { useUserNickname } from './useUserNickname';
 import { finalizeEvent } from 'nostr-tools';
 import { isCompleteRelayFailure, truncateNickname } from '@/lib/utils';
-import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
-import { decode } from 'ngeohash';
+import { fetchGeoRelays } from '@/lib/georelays';
 import type { NostrEvent } from '@nostrify/nostrify';
 
 export interface EphemeralEventMessage {
@@ -24,14 +23,29 @@ interface ChatSession {
   nickname: string;
 }
 
+type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
 interface _UseChatSessionReturn {
   session: ChatSession | null;
   isLoading: boolean;
+  messages: EphemeralEventMessage[];
   sendMessage: (content: string) => Promise<boolean>;
   updateNickname: (nickname: string) => void;
+  connectionStatus: ConnectionStatus;
+  onNewMessage?: (message: EphemeralEventMessage) => void;
 }
 
-export function useChatSession(geohash: string): _UseChatSessionReturn {
+// 1 hour in seconds for message time limit
+const ONE_HOUR_SECONDS = 60 * 60;
+
+// Default relays that are always available immediately
+const DEFAULT_CHAT_RELAYS = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
+
+export function useChatSession(
+  geohash: string,
+  initialEvents: EphemeralEventMessage[] = [],
+  onNewMessage?: (message: EphemeralEventMessage) => void
+): _UseChatSessionReturn {
   const { nostr } = useNostr();
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
@@ -39,6 +53,8 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
   const { nickname: userNickname, setNickname: setUserNickname } = useUserNickname();
   const [session, setSession] = useState<ChatSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasSeededInitialEvents, setHasSeededInitialEvents] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
 
   // Initialize session - use logged-in user if available, otherwise use ephemeral identity
   useEffect(() => {
@@ -63,25 +79,81 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
     }
   }, [geohash, user, ephemeralIdentity, userNickname]);
 
-  // Subscribe to new messages in the geohash
+  // Cache for geo relays once fetched
+  const [geoRelaysCache, setGeoRelaysCache] = useState<string[]>([]);
+
+  // Fetch geo relays in background (non-blocking)
+  useEffect(() => {
+    let cancelled = false;
+    fetchGeoRelays()
+      .then((relays) => {
+        if (!cancelled && relays.length > 0) {
+          const rotationIndex = Math.floor(Date.now() / 300000) % Math.max(1, relays.length);
+          const selectedRegionalRelays = relays.slice(rotationIndex, rotationIndex + 8);
+          setGeoRelaysCache(selectedRegionalRelays.map(r => r.url));
+        }
+      })
+      .catch((error) => {
+        console.warn('Failed to fetch geo relays for chat:', error);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Get the relays to use for chat - returns immediately with defaults, adds geo relays when available
+  const getChatRelays = useCallback((): string[] => {
+    const allRelays = new Set<string>(DEFAULT_CHAT_RELAYS);
+    geoRelaysCache.forEach(relay => allRelays.add(relay));
+    return Array.from(allRelays);
+  }, [geoRelaysCache]);
+
+  // Seed initial events from the preview (runs once when dialog opens)
+  useEffect(() => {
+    if (!geohash || hasSeededInitialEvents) return;
+
+    if (initialEvents.length > 0) {
+      const chatKey = ['chat-messages', geohash];
+      // Sort by timestamp (oldest first for chat display)
+      const sortedEvents = [...initialEvents].sort((a, b) => a.event.created_at - b.event.created_at);
+      queryClient.setQueryData(chatKey, sortedEvents);
+      setHasSeededInitialEvents(true);
+    }
+  }, [geohash, initialEvents, hasSeededInitialEvents, queryClient]);
+
+  // Subscribe to new messages in the geohash using real-time subscriptions
   useEffect(() => {
     if (!geohash || !nostr) return;
 
+    const chatRelays = getChatRelays();
+    const chatKey = ['chat-messages', geohash];
+    const abortController = new AbortController();
+    let isSubscribed = true;
+
     const fetchLatestMessages = async () => {
       try {
-        const signal = AbortSignal.timeout(15000); // 15 second timeout
+        setConnectionStatus('connecting');
+        const signal = AbortSignal.timeout(45000); // 45 second timeout for initial fetch
 
-        // Fetch the latest 50 messages for this geohash
+        // Get existing messages (may include seeded initial events)
+        const existingMessages = queryClient.getQueryData<EphemeralEventMessage[]>(chatKey) || [];
+        const existingIds = new Set(existingMessages.map(m => m.event.id));
+
+        // Fetch kind 20000 events from the last hour
+        // Then filter locally by exact geohash match
+        const oneHourAgo = Math.floor(Date.now() / 1000) - ONE_HOUR_SECONDS;
         const events = await nostr.query([
           {
             kinds: [20000],
-            '#g': [geohash],
-            limit: 50,
+            since: oneHourAgo,
+            limit: 500,
           }
-        ], { signal });
+        ], { signal, relays: chatRelays });
 
-        // Transform events and sort by timestamp (newest last for chat display)
-        const transformedMessages = events
+        // Filter to only events matching our exact geohash and transform
+        const fetchedMessages = events
+          .filter(event => {
+            const eventGeohash = event.tags.find(([name]) => name === 'g')?.[1];
+            return eventGeohash === geohash;
+          })
           .map(event => {
             const rawNickname = event.tags.find(([name]) => name === 'n')?.[1];
             return {
@@ -90,67 +162,105 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
               nickname: truncateNickname(rawNickname),
               message: event.content,
             };
-          })
+          });
+
+        // Merge with existing messages, avoiding duplicates
+        const newMessages = fetchedMessages.filter(m => !existingIds.has(m.event.id));
+        const allMessages = [...existingMessages, ...newMessages]
           .sort((a, b) => a.event.created_at - b.event.created_at);
 
         // Update the chat messages cache
-        const chatKey = ['chat-messages', geohash];
-        queryClient.setQueryData(chatKey, transformedMessages);
+        if (isSubscribed) {
+          queryClient.setQueryData(chatKey, allMessages);
+          setConnectionStatus('connected');
+        }
       } catch (error) {
         console.warn('Failed to fetch latest chat messages:', error);
+        if (isSubscribed) {
+          setConnectionStatus('error');
+        }
       }
     };
 
     // Fetch initial messages
     fetchLatestMessages();
 
-    // Set up periodic polling for new messages (check for new messages every 3 seconds)
-    const interval = setInterval(async () => {
+    // Set up real-time subscription for new messages
+    const subscribeToMessages = async () => {
       try {
-        const signal = AbortSignal.timeout(10000); // 10 second timeout
+        const now = Math.floor(Date.now() / 1000);
 
-        // Get the current latest message timestamp to avoid duplicates
-        const chatKey = ['chat-messages', geohash];
-        const currentMessages = queryClient.getQueryData<EphemeralEventMessage[]>(chatKey) || [];
-        const latestTimestamp = currentMessages.length > 0
-          ? Math.max(...currentMessages.map(msg => msg.event.created_at))
-          : 0;
-
-        // Fetch messages newer than the latest one we have
-        const newEvents = await nostr.query([
+        const subscription = nostr.req([
           {
             kinds: [20000],
-            '#g': [geohash],
-            since: latestTimestamp > 0 ? latestTimestamp + 1 : undefined,
+            since: now,
             limit: 100,
           }
-        ], { signal });
+        ], { signal: abortController.signal, relays: chatRelays });
 
-        if (newEvents.length > 0) {
-          const newMessages = newEvents
-            .map(event => {
+        // Process incoming messages in real-time using async iteration
+        for await (const msg of subscription) {
+          if (!isSubscribed) break;
+
+          if (msg[0] === 'EVENT') {
+            const event = msg[2];
+
+            try {
+              // Filter to exact geohash match
+              const eventGeohash = event.tags.find(([name]) => name === 'g')?.[1];
+              if (eventGeohash !== geohash) continue;
+
               const rawNickname = event.tags.find(([name]) => name === 'n')?.[1];
-              return {
+              const newMessage: EphemeralEventMessage = {
                 event,
-                geohash: event.tags.find(([name]) => name === 'g')?.[1],
+                geohash: eventGeohash,
                 nickname: truncateNickname(rawNickname),
                 message: event.content,
               };
-            })
-            .sort((a, b) => a.event.created_at - b.event.created_at);
 
-          // Append new messages to existing ones
-          queryClient.setQueryData(chatKey, [...currentMessages, ...newMessages]);
+              // Add to cache, avoiding duplicates
+              const currentMessages = queryClient.getQueryData<EphemeralEventMessage[]>(chatKey) || [];
+              const existingIds = new Set(currentMessages.map(m => m.event.id));
+
+              if (!existingIds.has(event.id) && isSubscribed) {
+                queryClient.setQueryData(chatKey, [...currentMessages, newMessage]);
+
+                // Call the callback for new messages
+                if (onNewMessage) {
+                  onNewMessage(newMessage);
+                }
+              }
+            } catch (error) {
+              console.warn('Failed to process real-time chat message:', error);
+            }
+          } else if (msg[0] === 'EOSE') {
+            console.log('Chat subscription: End of stored events');
+            if (isSubscribed) {
+              setConnectionStatus('connected');
+            }
+          } else if (msg[0] === 'CLOSED') {
+            console.log('Chat subscription: Connection closed');
+            if (isSubscribed) {
+              setConnectionStatus('disconnected');
+            }
+            break;
+          }
         }
       } catch (error) {
-        console.warn('Failed to poll for new chat messages:', error);
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Failed to maintain real-time chat subscription:', error);
+        }
       }
-    }, 3000); // Poll every 3 seconds for more real-time updates
+    };
+
+    // Start the subscription
+    subscribeToMessages();
 
     return () => {
-      clearInterval(interval);
+      isSubscribed = false;
+      abortController.abort();
     };
-  }, [geohash, nostr, queryClient]);
+  }, [geohash, nostr, queryClient, getChatRelays, onNewMessage]);
 
   // Update nickname function
   const updateNickname = useCallback((newNickname: string) => {
@@ -181,27 +291,6 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
       }
     }
   }, [geohash, queryClient]);
-
-  // Helper function to get chat relays (default + closest relays for geohash)
-  const getChatRelays = useCallback(async (targetGeohash: string): Promise<string[]> => {
-    const defaultRelays = ['wss://nos.lol', 'wss://relay.damus.io', 'wss://relay.primal.net'];
-
-    try {
-      const geoRelays = await fetchGeoRelays();
-      const { latitude, longitude } = decode(targetGeohash);
-      const closestRelays = findClosestRelays(geoRelays, latitude, longitude, 5);
-
-      // Combine closest relays with default relays, removing duplicates
-      const allRelays = new Set<string>(defaultRelays);
-      closestRelays.forEach(relay => allRelays.add(relay.url));
-
-      const relayUrls = Array.from(allRelays);
-      return relayUrls;
-    } catch (error) {
-      console.error('❌ Failed to fetch geo relays for chat send, using default relays only:', error);
-      return defaultRelays;
-    }
-  }, []);
 
   // Send message function
   const sendMessage = useCallback(async (content: string): Promise<boolean> => {
@@ -240,12 +329,12 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
       }
 
       try {
-        // Get optimal relays for this chat (default + closest relays)
-        const chatRelays = await getChatRelays(geohash);
+        // Get optimal relays for this chat (default + geo relays)
+        const chatRelays = getChatRelays();
 
         // Attempt to publish the event to chat-specific relays
         await nostr.event(eventToPublish, {
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(10000), // 10 second timeout for publishing
           relays: chatRelays
         });
 
@@ -290,21 +379,45 @@ export function useChatSession(geohash: string): _UseChatSessionReturn {
     }
   }, [session, geohash, nostr, queryClient, user, getChatRelays]);
 
-  // Query for accessing cached chat messages (fetched by the effect above)
-  const { data: _chatMessages = [] } = useQuery({
-    queryKey: ['chat-messages', geohash],
-    queryFn: () => {
-      // Return cached data - the actual fetching is done by the effect
-      return queryClient.getQueryData<EphemeralEventMessage[]>(['chat-messages', geohash]) || [];
-    },
-    enabled: !!geohash,
-    staleTime: 1000, // Check cache frequently for new messages
-  });
+  // Track messages in state, synced with cache
+  const [messages, setMessages] = useState<EphemeralEventMessage[]>(initialEvents);
+
+  // Reset state when geohash changes to prevent stale messages from previous chat
+  useEffect(() => {
+    setHasSeededInitialEvents(false);
+    setMessages(initialEvents);
+  }, [geohash]); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally only reset on geohash change
+
+  // Subscribe to cache updates
+  useEffect(() => {
+    if (!geohash) return;
+
+    const chatKey = ['chat-messages', geohash];
+
+    // Get initial data from cache, or reset to empty/initial if no cached data
+    const cachedData = queryClient.getQueryData<EphemeralEventMessage[]>(chatKey);
+    setMessages(cachedData ?? initialEvents);
+
+    // Subscribe to cache changes
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event.query.queryKey[0] === 'chat-messages' && event.query.queryKey[1] === geohash) {
+        const data = queryClient.getQueryData<EphemeralEventMessage[]>(chatKey);
+        if (data) {
+          setMessages(data);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [geohash, queryClient, initialEvents]);
 
   return {
     session,
     isLoading,
+    messages,
     sendMessage,
     updateNickname,
+    connectionStatus,
+    onNewMessage,
   };
 }
