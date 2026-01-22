@@ -87,8 +87,40 @@ export async function fetchGeoRelays(): Promise<GeoRelay[]> {
   }
 }
 
-export function findClosestRelays(relays: GeoRelay[], targetLat: number, targetLng: number, count: number = 5): GeoRelay[] {
+// Overload for geohash string
+export async function findClosestRelays(relays: GeoRelay[], geohash: string, count?: number): Promise<GeoRelay[]>;
+// Overload for lat/lng
+export function findClosestRelays(relays: GeoRelay[], targetLat: number, targetLng: number, count?: number): GeoRelay[];
+// Implementation
+export function findClosestRelays(relays: GeoRelay[], targetLatOrGeohash: number | string, targetLngOrCount?: number, count?: number): GeoRelay[] | Promise<GeoRelay[]> {
   if (relays.length === 0) return [];
+
+  // Check if first parameter is a geohash string
+  if (typeof targetLatOrGeohash === 'string') {
+    // Async path for geohash
+    return (async () => {
+      const { decode } = await import('ngeohash');
+      const { latitude, longitude } = decode(targetLatOrGeohash);
+      const finalCount = typeof targetLngOrCount === 'number' ? targetLngOrCount : 5;
+
+      // Calculate distances using Haversine formula
+      const relaysWithDistance = relays.map(relay => {
+        const distance = calculateDistance(latitude, longitude, relay.latitude, relay.longitude);
+        return { ...relay, distance };
+      });
+
+      // Sort by distance and return the closest ones
+      return relaysWithDistance
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, finalCount)
+        .map(({ distance, ...relay }) => relay);
+    })();
+  }
+
+  // Sync path for lat/lng
+  const targetLat = targetLatOrGeohash;
+  const targetLng = targetLngOrCount as number;
+  const finalCount = count ?? 5;
 
   // Calculate distances using Haversine formula
   const relaysWithDistance = relays.map(relay => {
@@ -99,7 +131,7 @@ export function findClosestRelays(relays: GeoRelay[], targetLat: number, targetL
   // Sort by distance and return the closest ones
   return relaysWithDistance
     .sort((a, b) => a.distance - b.distance)
-    .slice(0, count)
+    .slice(0, finalCount)
     .map(({ distance, ...relay }) => relay);
 }
 

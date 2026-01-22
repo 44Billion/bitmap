@@ -6,7 +6,7 @@ import { useEphemeralIdentity } from './useEphemeralIdentity';
 import { useUserNickname } from './useUserNickname';
 import { finalizeEvent } from 'nostr-tools';
 import { isCompleteRelayFailure, truncateNickname } from '@/lib/utils';
-import { fetchGeoRelays } from '@/lib/georelays';
+import { fetchGeoRelays, findClosestRelays } from '@/lib/georelays';
 import type { NostrEvent } from '@nostrify/nostrify';
 
 export interface EphemeralEventMessage {
@@ -79,32 +79,22 @@ export function useChatSession(
     }
   }, [geohash, user, ephemeralIdentity, userNickname]);
 
-  // Cache for geo relays once fetched
-  const [geoRelaysCache, setGeoRelaysCache] = useState<string[]>([]);
+  // Get the relays to use for chat - defaults + closest georelays for the geohash
+  const getChatRelays = useCallback(async (targetGeohash: string): Promise<string[]> => {
+    try {
+      const geoRelays = await fetchGeoRelays();
+      const closestRelays = await findClosestRelays(geoRelays, targetGeohash, 5); // 5 closest relays
 
-  // Fetch geo relays in background (non-blocking)
-  useEffect(() => {
-    let cancelled = false;
-    fetchGeoRelays()
-      .then((relays) => {
-        if (!cancelled && relays.length > 0) {
-          const rotationIndex = Math.floor(Date.now() / 300000) % Math.max(1, relays.length);
-          const selectedRegionalRelays = relays.slice(rotationIndex, rotationIndex + 8);
-          setGeoRelaysCache(selectedRegionalRelays.map(r => r.url));
-        }
-      })
-      .catch((error) => {
-        console.warn('Failed to fetch geo relays for chat:', error);
-      });
-    return () => { cancelled = true; };
+      // Combine closest relays with default relays, removing duplicates
+      const allRelays = new Set<string>(DEFAULT_CHAT_RELAYS);
+      closestRelays.forEach(relay => allRelays.add(relay.url));
+
+      return Array.from(allRelays);
+    } catch (error) {
+      console.error('❌ Failed to fetch geo relays for chat, using defaults only:', error);
+      return DEFAULT_CHAT_RELAYS;
+    }
   }, []);
-
-  // Get the relays to use for chat - returns immediately with defaults, adds geo relays when available
-  const getChatRelays = useCallback((): string[] => {
-    const allRelays = new Set<string>(DEFAULT_CHAT_RELAYS);
-    geoRelaysCache.forEach(relay => allRelays.add(relay));
-    return Array.from(allRelays);
-  }, [geoRelaysCache]);
 
   // Seed initial events from the preview (runs once when dialog opens)
   useEffect(() => {
@@ -123,7 +113,6 @@ export function useChatSession(
   useEffect(() => {
     if (!geohash || !nostr) return;
 
-    const chatRelays = getChatRelays();
     const chatKey = ['chat-messages', geohash];
     const abortController = new AbortController();
     let isSubscribed = true;
@@ -132,6 +121,9 @@ export function useChatSession(
       try {
         setConnectionStatus('connecting');
         const signal = AbortSignal.timeout(45000); // 45 second timeout for initial fetch
+
+        // Get the closest relays for this geohash
+        const chatRelays = await getChatRelays(geohash);
 
         // Get existing messages (may include seeded initial events)
         const existingMessages = queryClient.getQueryData<EphemeralEventMessage[]>(chatKey) || [];
@@ -189,6 +181,9 @@ export function useChatSession(
     const subscribeToMessages = async () => {
       try {
         const now = Math.floor(Date.now() / 1000);
+
+        // Get the closest relays for this geohash
+        const chatRelays = await getChatRelays(geohash);
 
         const subscription = nostr.req([
           {
@@ -329,8 +324,8 @@ export function useChatSession(
       }
 
       try {
-        // Get optimal relays for this chat (default + geo relays)
-        const chatRelays = getChatRelays();
+        // Get optimal relays for this chat (default + closest geo relays for this geohash)
+        const chatRelays = await getChatRelays(geohash);
 
         // Attempt to publish the event to chat-specific relays
         await nostr.event(eventToPublish, {
